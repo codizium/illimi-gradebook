@@ -1,0 +1,29 @@
+{
+  "name": "illimi/illimi-gradebook",
+  "description": "iLLIMI Edu-Suites - Gradebook Module",
+  "type": "library",
+  "require": {
+    "php": "^8.2",
+    "codizium/codizium-core": "*",
+    "codizium/illimi-academics": "*",
+    "codizium/illimi-students": "*",
+    "codizium/illimi-staff": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "Illimi\\Gradebook\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Illimi\\Gradebook\\Providers\\IllimiGradebookServiceProvider"
+      ],
+      "aliases": {
+        "IllimiGradebook": "Illimi\\Gradebook\\Facades\\IllimiGradebook"
+      }
+    }
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true
+}
