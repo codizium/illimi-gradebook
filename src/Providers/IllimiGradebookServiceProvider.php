@@ -44,8 +44,6 @@ class IllimiGradebookServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../../resources/views' => resource_path('views/vendor/illimi-gradebook'),
         ], 'illimi-gradebook-views');
-
-        $this->registerMenu();
     }
 
     protected function apiRouteMiddleware(): array
@@ -57,37 +55,5 @@ class IllimiGradebookServiceProvider extends ServiceProvider
         }
 
         return $middleware;
-    }
-
-    protected function registerMenu(): void
-    {
-        if (!config('gradebook.menu.enabled', true)) {
-            return;
-        }
-
-        if (!$this->app->bound('codizium-core')) {
-            return;
-        }
-
-        $routeName = config('gradebook.menu.route', 'gradebook.index');
-        if (!Route::has($routeName)) {
-            return;
-        }
-
-        $core = $this->app->make('codizium-core');
-
-        if (!method_exists($core, 'registerSideMenu')) {
-            return;
-        }
-
-        $core->registerSideMenu([
-            [
-                'label' => config('gradebook.menu.label', 'Gradebook'),
-                'icon' => config('gradebook.menu.icon', 'ri-file-chart-line'),
-                'route' => $routeName,
-                'permission' => config('gradebook.menu.permission', 'view gradebook'),
-                'children' => config('gradebook.menu.children', []),
-            ],
-        ]);
     }
 }
