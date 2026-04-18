@@ -199,25 +199,13 @@
                 <div>
                     <div class="sheet-label mb-6">Worksheet</div>
                     <h6 class="mb-4">{{ $subject->name }} - {{ $class->name }} <span class="sheet-pill">{{ $class->section?->name ?: 'No Section' }}</span></h6>
-                    <p class="mb-0 text-secondary-light">
+                    {{-- <p class="mb-0 text-secondary-light">
                         Enter student scores row by row using
                         {{ $resolvedTemplate?->name ? '"' . $resolvedTemplate->name . '"' : 'the legacy workbook layout' }}.
-                    </p>
+                    </p> --}}
                 </div>
                 <div class="d-flex flex-wrap gap-8">
                     <span class="sheet-pill">{{ $termsForYear->firstWhere('id', $selectedAcademicTermId)?->name ?: 'No term selected' }}</span>
-                    <a
-                        href="{{ route('gradebook.ratings.effective', ['class' => $class->id, 'academic_year_id' => $selectedAcademicYearId, 'academic_term_id' => $selectedAcademicTermId]) }}"
-                        class="btn btn-sm btn-outline-primary-600"
-                    >
-                        Effective Assessment
-                    </a>
-                    <a
-                        href="{{ route('gradebook.ratings.psychomotor', ['class' => $class->id, 'academic_year_id' => $selectedAcademicYearId, 'academic_term_id' => $selectedAcademicTermId]) }}"
-                        class="btn btn-sm btn-outline-primary-600"
-                    >
-                        Psychomotor
-                    </a>
                     @if ($resolvedTemplate)
                         <span class="sheet-pill">{{ $resolvedTemplate->code ?: 'Active Template' }}</span>
                     @else

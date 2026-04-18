@@ -13,13 +13,15 @@
 
     <div class="card h-100">
         <div class="card-body p-0 dataTable-wrapper">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-16 px-20 py-12 border-bottom border-neutral-200">
+            <div
+                class="d-flex align-items-center justify-content-between flex-wrap gap-16 px-20 py-12 border-bottom border-neutral-200">
                 <div>
                     <h6 class="mb-4">Subject Gradebooks</h6>
                     <p class="mb-0 text-secondary-light">Pick a class-bound subject and jump straight into score entry.</p>
                 </div>
                 <form class="navbar-search dt-search m-0">
-                    <input type="text" class="dt-input bg-transparent radius-4" name="search" placeholder="Search subject or class..." />
+                    <input type="text" class="dt-input bg-transparent radius-4" name="search"
+                        placeholder="Search subject or class..." />
                     <iconify-icon icon="ion:search-outline" class="icon"></iconify-icon>
                 </form>
             </div>
@@ -41,7 +43,10 @@
                         @forelse ($subjectClassRows as $row)
                             @php
                                 $teacherNames = $row->teachers
-                                    ->map(fn ($teacher) => $teacher->full_name ?? trim(($teacher->first_name ?? '') . ' ' . ($teacher->last_name ?? '')))
+                                    ->map(
+                                        fn($teacher) => $teacher->full_name ??
+                                            trim(($teacher->first_name ?? '') . ' ' . ($teacher->last_name ?? '')),
+                                    )
                                     ->filter()
                                     ->values();
                             @endphp
@@ -54,32 +59,26 @@
                                 <td>{{ $teacherNames->isNotEmpty() ? $teacherNames->join(', ') : '—' }}</td>
                                 <td class="text-center">
                                     <div class="dropdown">
-                                        <button class="btn btn-sm btn-outline-primary-600 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <button class="btn btn-sm btn-outline-primary-600 dropdown-toggle" type="button"
+                                            data-bs-toggle="dropdown" aria-expanded="false">
                                             Actions
                                         </button>
                                         <ul class="dropdown-menu dropdown-menu-end">
                                             <li>
-                                                <a class="dropdown-item" href="{{ route('gradebook.assessments.show', ['subject' => $row->subject->id, 'class' => $row->class->id]) }}">
+                                                <a class="dropdown-item"
+                                                    href="{{ route('gradebook.assessments.show', ['subject' => $row->subject->id, 'class' => $row->class->id]) }}">
                                                     Enter Gradebook
                                                 </a>
                                             </li>
-                                            <li>
-                                                <a class="dropdown-item" href="{{ route('gradebook.ratings.effective', ['class' => $row->class->id]) }}">
-                                                    Effective Assessment
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <a class="dropdown-item" href="{{ route('gradebook.ratings.psychomotor', ['class' => $row->class->id]) }}">
-                                                    Psychomotor
-                                                </a>
-                                            </li>
+
                                         </ul>
                                     </div>
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="text-center py-24 text-secondary-light">No class subjects available yet.</td>
+                                <td colspan="7" class="text-center py-24 text-secondary-light">No class subjects
+                                    available yet.</td>
                             </tr>
                         @endforelse
                     </tbody>

@@ -25,8 +25,8 @@
         <div class="card-body p-0 dataTable-wrapper">
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-16 px-20 py-12 border-bottom border-neutral-200">
                 <div>
-                    <h6 class="mb-4">Workbook Templates</h6>
-                    <p class="mb-0 text-secondary-light">Create organization-specific assessment structures and keep them synced in real time across users.</p>
+                    <h6 class="mb-4">Gradebook Templates</h6>
+                    <p class="mb-0 text-secondary-light">Create  assessment structures and keep them synced in real time.</p>
                 </div>
                 <form class="navbar-search dt-search m-0">
                     <input type="text" class="dt-input bg-transparent radius-4" name="search" placeholder="Search templates..." />
