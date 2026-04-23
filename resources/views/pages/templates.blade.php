@@ -143,7 +143,7 @@
                 </div>
                 <form id="gradebookTemplateForm"
                     data-create-url="{{ route('v1.gradebook.templates.store', [], false) }}"
-                    data-update-url-template="{{ route('v1.gradebook.templates.update', ['id' => '__ID__'], false) }}">
+                    data-update-url-template="{{ route('v1.gradebook.templates.update', ['template' => '__ID__'], false) }}">
                     <div class="modal-body">
                         <div class="alert alert-danger d-none" id="gradebookTemplateModalError"></div>
                         <input type="hidden" name="id" />
@@ -595,11 +595,11 @@
                 });
             });
 
-            yearSelect?.addEventListener('change', function() {
+            yearSelect?.on('change', function() {
                 filterTermsByYear(this.value);
             });
 
-            form?.addEventListener('submit', function(event) {
+            form?.on('submit', function(event) {
                 event.preventDefault();
                 clearErrors();
 
@@ -659,7 +659,7 @@
                 });
             });
 
-            window.addEventListener('gradebook:entity.changed', function(event) {
+            window.on('gradebook:entity.changed', function(event) {
                 const payload = event.detail || {};
                 if (payload.entity !== 'assessment_template') {
                     return;
@@ -674,7 +674,7 @@
                 }, 2200);
             });
 
-            modalElement?.addEventListener('hidden.bs.modal', function() {
+            modalElement?.on('hidden.bs.modal', function() {
                 resetForm();
             });
 
