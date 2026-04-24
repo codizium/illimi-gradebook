@@ -34,12 +34,6 @@ class Assessment extends BaseModel
         'template_id',
         'grade_scale_id',
         'staff_id',
-        'assignment1',
-        'assignment2',
-        'test1',
-        'test2',
-        'exams',
-        'graded',
     ];
 
     protected $casts = [
@@ -53,11 +47,6 @@ class Assessment extends BaseModel
         'template_id' => 'string',
         'grade_scale_id' => 'string',
         'staff_id' => 'string',
-        'assignment1' => 'decimal:2',
-        'assignment2' => 'decimal:2',
-        'test1' => 'decimal:2',
-        'test2' => 'decimal:2',
-        'exams' => 'decimal:2',
     ];
 
     protected $appends = [
@@ -123,10 +112,7 @@ class Assessment extends BaseModel
                 ->sum('score');
         }
 
-        return (float) $this->assignment1
-            + (float) $this->assignment2
-            + (float) $this->test1
-            + (float) $this->test2;
+        return 0.0;
     }
 
     public function getTotalScoreAttribute(): float
@@ -137,6 +123,30 @@ class Assessment extends BaseModel
                 ->sum('score');
         }
 
-        return $this->continuous_assessment_total + (float) $this->exams;
+        return $this->continuous_assessment_total;
+    }
+
+    public function getGrade(): string
+    {
+        static $gradeScales = null;
+
+        if ($gradeScales === null) {
+            $gradeScales = GradeScale::orderByDesc('min_score')->get();
+        }
+
+        $total = (float) $this->total_score;
+
+        foreach ($gradeScales as $gradeScale) {
+            $minScore = $gradeScale->min_score !== null ? (float) $gradeScale->min_score : null;
+            $maxScore = $gradeScale->max_score !== null ? (float) $gradeScale->max_score : null;
+
+            if ($minScore === null && $maxScore === null) continue;
+
+            if (($minScore === null || $total >= $minScore) && ($maxScore === null || $total <= $maxScore)) {
+                return (string) ($gradeScale->code ?? 'F');
+            }
+        }
+
+        return 'F';
     }
 }

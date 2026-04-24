@@ -139,34 +139,16 @@ class GradebookWebController extends BaseController
                 ->get()
                 ->keyBy('student_id');
 
-            $studentRatings = $this->queryFor(StudentRating::class)
-                ->where('academic_class_id', $classModel->id)
-                ->where('academic_year_id', $selectedAcademicYearId)
-                ->where('academic_term_id', $selectedAcademicTermId)
-                ->get()
-                ->keyBy('student_id');
+
         }
 
         if ($templateItems->isEmpty()) {
-            $templateItems = collect([
-                (object) ['id' => 'assignment1', 'label' => 'Assignment 1', 'code' => 'A1', 'component_type' => 'continuous_assessment', 'max_score' => null, 'position' => 1, 'affects_total' => true],
-                (object) ['id' => 'assignment2', 'label' => 'Assignment 2', 'code' => 'A2', 'component_type' => 'continuous_assessment', 'max_score' => null, 'position' => 2, 'affects_total' => true],
-                (object) ['id' => 'test1', 'label' => 'Test 1', 'code' => 'T1', 'component_type' => 'continuous_assessment', 'max_score' => null, 'position' => 3, 'affects_total' => true],
-                (object) ['id' => 'test2', 'label' => 'Test 2', 'code' => 'T2', 'component_type' => 'continuous_assessment', 'max_score' => null, 'position' => 4, 'affects_total' => true],
-                (object) ['id' => 'exams', 'label' => 'Exams', 'code' => 'EXAM', 'component_type' => 'exam', 'max_score' => null, 'position' => 5, 'affects_total' => true],
-            ]);
-            $continuousAssessmentItems = $templateItems
-                ->filter(fn ($item) => $item->component_type === 'continuous_assessment')
-                ->values();
-            $nonContinuousItems = $templateItems
-                ->filter(fn ($item) => $item->component_type !== 'continuous_assessment')
-                ->values();
+            return back()->with('error', 'No template items found for this subject and class and year and term');
         }
 
         $gradebookRows = $students->map(fn (Student $student) => $this->buildGradebookRow(
             $student,
             $assessments,
-            $studentRatings,
             $resolvedTemplate,
             $templateItems,
             $continuousAssessmentItems,
@@ -187,8 +169,6 @@ class GradebookWebController extends BaseController
             'continuousAssessmentItems' => $continuousAssessmentItems,
             'nonContinuousItems' => $nonContinuousItems,
             'gradebookRows' => $gradebookRows,
-            'effectiveAssessmentItems' => $ratingService->effectiveItems(),
-            'psychomotorAssessmentItems' => $ratingService->psychomotorItems(),
         ];
     }
 
@@ -216,51 +196,11 @@ class GradebookWebController extends BaseController
             ->orderBy('last_name')
             ->get();
 
-        $studentRatings = collect();
-        $ratingService = app(StudentRatingService::class);
-
-        if ($selectedAcademicYearId && $selectedAcademicTermId) {
-            $studentRatings = $this->queryFor(StudentRating::class)
-                ->where('academic_class_id', $classModel->id)
-                ->where('academic_year_id', $selectedAcademicYearId)
-                ->where('academic_term_id', $selectedAcademicTermId)
-                ->get()
-                ->keyBy('student_id');
-        }
-
+        
         $currentStaffId = $classModel->class_teacher_id ?: Staff::query()
             ->when($this->organizationId(), fn (Builder $query, string $organizationId) => $query->where('organization_id', $organizationId))
             ->where('user_id', auth()->id())
             ->value('id');
-
-        $ratingRows = $students->map(function (Student $student) use ($studentRatings, $ratingService) {
-            $studentRating = $studentRatings->get($student->id);
-
-            return (object) [
-                'student' => $student,
-                'student_rating' => $studentRating,
-                'effective_assessment' => collect($ratingService->effectiveItems())->map(function ($label, $key) use ($studentRating, $ratingService) {
-                    $value = $studentRating?->effective_assessment[$key] ?? null;
-
-                    return (object) [
-                        'key' => $key,
-                        'label' => $label,
-                        'value' => $value,
-                        'rating' => $ratingService->ratingLabel($value),
-                    ];
-                })->values(),
-                'psychomotor_assessment' => collect($ratingService->psychomotorItems())->map(function ($label, $key) use ($studentRating, $ratingService) {
-                    $value = $studentRating?->psychomotor_assessment[$key] ?? null;
-
-                    return (object) [
-                        'key' => $key,
-                        'label' => $label,
-                        'value' => $value,
-                        'rating' => $ratingService->ratingLabel($value),
-                    ];
-                })->values(),
-            ];
-        });
 
         return [
             'class' => $classModel,
@@ -269,23 +209,22 @@ class GradebookWebController extends BaseController
             'termsForYear' => $termsForYear,
             'selectedAcademicYearId' => $selectedAcademicYearId,
             'selectedAcademicTermId' => $selectedAcademicTermId,
-            'ratingRows' => $ratingRows,
-            'effectiveAssessmentItems' => $ratingService->effectiveItems(),
-            'psychomotorAssessmentItems' => $ratingService->psychomotorItems(),
             'currentStaffId' => $currentStaffId,
         ];
     }
 
-    private function buildGradebookRow($student, $assessments, $studentRatings, $resolvedTemplate, $templateItems, $continuousAssessmentItems, $nonContinuousItems, $ratingService)
+    private function buildGradebookRow($student, $assessments, $resolvedTemplate, $templateItems, $continuousAssessmentItems, $nonContinuousItems, $ratingService)
     {
         $assessment = $assessments->get($student->id);
-        $studentRating = $studentRatings->get($student->id);
+
         $activeTemplate = $assessment?->template ?? $resolvedTemplate;
 
         $rowTemplateItems = $activeTemplate?->items?->values() ?: $templateItems;
+
         $rowContinuousItems = $rowTemplateItems
             ? $rowTemplateItems->filter(fn($item) => $item->component_type === 'continuous_assessment')->values()
             : $continuousAssessmentItems;
+
         $rowNonContinuousItems = $rowTemplateItems
             ? $rowTemplateItems->filter(fn($item) => $item->component_type !== 'continuous_assessment')->values()
             : $nonContinuousItems;
@@ -294,18 +233,6 @@ class GradebookWebController extends BaseController
             ? $assessment->items->mapWithKeys(fn($item) => [$item->template_item_id => (float) $item->score])
             : collect();
 
-        if ($rowTemplateItems->isEmpty()) {
-            $rowTemplateItems = $templateItems;
-            $rowContinuousItems = $templateItems->filter(fn($item) => $item->component_type === 'continuous_assessment')->values();
-            $rowNonContinuousItems = $templateItems->filter(fn($item) => $item->component_type !== 'continuous_assessment')->values();
-            $scoresByTemplateItemId = collect([
-                'assignment1' => (float) ($assessment?->assignment1 ?? 0),
-                'assignment2' => (float) ($assessment?->assignment2 ?? 0),
-                'test1' => (float) ($assessment?->test1 ?? 0),
-                'test2' => (float) ($assessment?->test2 ?? 0),
-                'exams' => (float) ($assessment?->exams ?? 0),
-            ]);
-        }
 
         $items = $rowTemplateItems->map(function ($item, $index) use ($scoresByTemplateItemId) {
             return (object) [
@@ -316,49 +243,29 @@ class GradebookWebController extends BaseController
                 'max_score' => $item->max_score,
                 'position' => $item->position ?? ($index + 1),
                 'affects_total' => (bool) ($item->affects_total ?? true),
-                'score' => (float) ($scoresByTemplateItemId->get($item->id) ?? 0),
+                'score' => $scoresByTemplateItemId->has($item->id) ? (string    ) $scoresByTemplateItemId->get($item->id) : '',
             ];
         })->values();
 
+        
         $totalCa = $items
             ->filter(fn($item) => $item->component_type === 'continuous_assessment')
-            ->sum('score');
+            ->sum(fn($item) => (float) $item->score);
         $total = $items
             ->filter(fn($item) => $item->affects_total)
-            ->sum('score');
+            ->sum(fn($item) => (float) $item->score);
 
         return (object) [
             'student' => $student,
             'assessment' => $assessment,
-            'student_rating' => $studentRating,
             'template' => $activeTemplate,
             'items' => $items,
             'continuous_items' => $rowContinuousItems,
             'non_continuous_items' => $rowNonContinuousItems,
             'total_ca' => $totalCa,
             'total' => $total,
-            'grade' => $assessment?->graded,
+            'grade' => $assessment?->getGrade() ?? 'F',
             'remark' => $assessment?->gradeScale?->description,
-            'effective_assessment' => collect($ratingService->effectiveItems())->map(function ($label, $key) use ($studentRating, $ratingService) {
-                $value = $studentRating?->effective_assessment[$key] ?? null;
-
-                return (object) [
-                    'key' => $key,
-                    'label' => $label,
-                    'value' => $value,
-                    'rating' => $ratingService->ratingLabel($value),
-                ];
-            })->values(),
-            'psychomotor_assessment' => collect($ratingService->psychomotorItems())->map(function ($label, $key) use ($studentRating, $ratingService) {
-                $value = $studentRating?->psychomotor_assessment[$key] ?? null;
-
-                return (object) [
-                    'key' => $key,
-                    'label' => $label,
-                    'value' => $value,
-                    'rating' => $ratingService->ratingLabel($value),
-                ];
-            })->values(),
         ];
     }
 

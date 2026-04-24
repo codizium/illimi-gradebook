@@ -35,28 +35,17 @@
                             <th>Code</th>
                             <th>Class</th>
                             <th>Section</th>
-                            <th>Teachers</th>
                             <th class="text-center">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse ($subjectClassRows as $row)
-                            @php
-                                $teacherNames = $row->teachers
-                                    ->map(
-                                        fn($teacher) => $teacher->full_name ??
-                                            trim(($teacher->first_name ?? '') . ' ' . ($teacher->last_name ?? '')),
-                                    )
-                                    ->filter()
-                                    ->values();
-                            @endphp
                             <tr>
                                 <td>{{ $loop->iteration }}</td>
                                 <td class="fw-semibold text-primary-light">{{ $row->subject->name }}</td>
                                 <td>{{ $row->subject->code ?: '—' }}</td>
                                 <td>{{ $row->class->name }}</td>
-                                <td>{{ $row->class->section?->name ?: '—' }}</td>
-                                <td>{{ $teacherNames->isNotEmpty() ? $teacherNames->join(', ') : '—' }}</td>
+                                <td>{{ $row->class->section?->name ?: '—' }}</td>   
                                 <td class="text-center">
                                     <div class="dropdown">
                                         <button class="btn btn-sm btn-outline-primary-600 dropdown-toggle" type="button"

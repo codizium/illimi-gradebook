@@ -132,7 +132,7 @@
                 </div>
                 <form id="tokenForm"
                     data-create-url="{{ route('v1.gradebook.tokens.store', [], false) }}"
-                    data-update-url-template="{{ route('v1.gradebook.tokens.update', ['id' => '__ID__'], false) }}">
+                    data-update-url-template="{{ route('v1.gradebook.tokens.update', ['token' => '__ID__'], false) }}">
                     <div class="modal-body">
                         <div class="alert alert-danger d-none" id="tokenModalError"></div>
                         <input type="hidden" name="id" />
