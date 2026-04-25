@@ -44,6 +44,42 @@ class IllimiGradebookServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../../resources/views' => resource_path('views/vendor/illimi-gradebook'),
         ], 'illimi-gradebook-views');
+
+        $this->registerMenu();
+    }
+
+    protected function registerMenu()
+    {
+        if (class_exists(\Illimi\IllimiCore\Facades\IllimiCore::class)) {
+            $nav = \Illimi\IllimiCore\Facades\IllimiCore::navigation();
+
+            // Admin Gradebook
+            $nav->register('gradebook', [
+                'label' => 'Gradebook',
+                'icon' => 'ri-file-chart-line',
+                'category' => 'academics',
+                'priority' => 40,
+                'roles' => ['admin', 'super-admin'],
+                'feature' => 'results_management',
+                'children' => [
+                    ['label' => 'Dashboard', 'route' => 'gradebook.index'],
+                    ['label' => 'Assessments', 'route' => 'gradebook.assessments.index'],
+                    ['label' => 'Templates', 'route' => 'gradebook.templates.index'],
+                    ['label' => 'Reports', 'route' => 'gradebook.reports.index'],
+                    ['label' => 'Tokens', 'route' => 'gradebook.tokens.index'],
+                ],
+            ]);
+
+            // Teacher Gradebook Shortcut
+            $nav->register('teacher-gradebook', [
+                'label' => 'Assessments',
+                'icon' => 'ri-file-chart-line',
+                'category' => 'academics',
+                'priority' => 41,
+                'roles' => ['teacher'],
+                'route' => 'gradebook.assessments.index',
+            ]);
+        }
     }
 
     protected function apiRouteMiddleware(): array

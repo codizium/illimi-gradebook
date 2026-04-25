@@ -29,8 +29,15 @@ class GradebookWebController extends BaseController
     {
         $query = $modelClass::query();
 
+        // Apply role-based scopes in priority order.
+        // TeacherScope is checked first because a Teacher who is also a Parent
+        // should use Teacher-level visibility in the academic context.
         if (method_exists($modelClass, 'scopeTeacher')) {
             $query->teacher();
+        } elseif (method_exists($modelClass, 'scopeStudent')) {
+            $query->student();
+        } elseif (method_exists($modelClass, 'scopeParent')) {
+            $query->parent();
         }
 
         $query->when(
