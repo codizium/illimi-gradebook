@@ -15,7 +15,7 @@ class GradebookModuleManager
                 'children' => [
                     ['label' => 'Dashboard', 'route' => 'gradebook.index'],
                     ['label' => 'Assessments', 'route' => 'gradebook.assessments.index'],
-                    ['label' => 'Templates', 'route' => 'gradebook.templates.index'],
+                    // ['label' => 'Templates', 'route' => 'gradebook.templates.index'],
                     ['label' => 'Reports', 'route' => 'gradebook.reports.index'],
                     ['label' => 'Tokens', 'route' => 'gradebook.tokens.index'],
                 ],

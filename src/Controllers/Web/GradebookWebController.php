@@ -7,11 +7,13 @@ use Illuminate\Database\Eloquent\Builder;
 use Illimi\Academics\Models\AcademicClass;
 use Illimi\Academics\Models\AcademicTerm;
 use Illimi\Academics\Models\AcademicYear;
+use Illimi\Academics\Models\GradeScale;
 use Illimi\Academics\Models\Subject;
 use Illimi\Gradebook\Models\Assessment;
 use Illimi\Gradebook\Models\AssessmentTemplate;
 use Illimi\Gradebook\Models\StudentRating;
 use Illimi\Gradebook\Models\Token;
+use Illimi\Gradebook\Models\Report;
 use Illimi\Gradebook\Services\AssessmentTemplateService;
 use Illimi\Gradebook\Services\StudentRatingService;
 use Illimi\Staff\Models\Staff;
@@ -65,23 +67,23 @@ class GradebookWebController extends BaseController
             });
         })->values();
 
-        return view('illimi-gradebook::pages.index', compact('subjectClassRows'));
+        return \Inertia\Inertia::render('Gradebook/Index', compact('subjectClassRows'));
     }
 
     #[Get('/gradebook/{subject}/{class}', name: 'gradebook.sheet')]
     public function show(string $subject, string $class)
     {
-        return view('illimi-gradebook::pages.sheet', $this->loadGradebookContext($subject, $class));
+        return \Inertia\Inertia::render('Gradebook/Sheet', $this->loadGradebookContext($subject, $class));
     }
 
     public function effectiveAssessment(string $class)
     {
-        return view('illimi-gradebook::pages.effective-assessment', $this->loadClassRatingContext($class));
+        return \Inertia\Inertia::render('Gradebook/EffectiveAssessment', $this->loadClassRatingContext($class));
     }
 
     public function psychomotorAssessment(string $class)
     {
-        return view('illimi-gradebook::pages.psychomotor-assessment', $this->loadClassRatingContext($class));
+        return \Inertia\Inertia::render('Gradebook/PsychomotorAssessment', $this->loadClassRatingContext($class));
     }
 
     private function loadGradebookContext(string $subject, string $class): array
@@ -96,6 +98,9 @@ class GradebookWebController extends BaseController
 
         $academicYears = $this->queryFor(AcademicYear::class)->orderByDesc('start_date')->orderBy('name')->get();
         $academicTerms = $this->queryFor(AcademicTerm::class)->orderBy('start_date')->orderBy('name')->get();
+        $gradeScales = $this->queryFor(GradeScale::class)
+            ->orderByDesc('min_score')
+            ->get();
 
         $selectedAcademicYearId = request('academic_year_id') ?: $academicYears->first()?->id;
 
@@ -150,7 +155,7 @@ class GradebookWebController extends BaseController
         }
 
         if ($templateItems->isEmpty()) {
-            return back()->with('error', 'No template items found for this subject and class and year and term');
+            throw new \Exception( 'No template items found for this subject and class and year and term');
         }
 
         $gradebookRows = $students->map(fn (Student $student) => $this->buildGradebookRow(
@@ -168,6 +173,7 @@ class GradebookWebController extends BaseController
             'class' => $classModel,
             'academicYears' => $academicYears,
             'academicTerms' => $academicTerms,
+            'gradeScales' => $gradeScales,
             'termsForYear' => $termsForYear,
             'selectedAcademicYearId' => $selectedAcademicYearId,
             'selectedAcademicTermId' => $selectedAcademicTermId,
@@ -203,6 +209,18 @@ class GradebookWebController extends BaseController
             ->orderBy('last_name')
             ->get();
 
+        $ratings = collect();
+        $effectiveItems = StudentRatingService::EFFECTIVE_ASSESSMENT_ITEMS;
+        $psychomotorItems = StudentRatingService::PSYCHOMOTOR_ASSESSMENT_ITEMS;
+
+        if ($selectedAcademicYearId && $selectedAcademicTermId) {
+            $ratings = app(StudentRatingService::class)->ratingsForContext([
+                'academic_class_id' => $classModel->id,
+                'academic_year_id' => $selectedAcademicYearId,
+                'academic_term_id' => $selectedAcademicTermId,
+            ]);
+        }
+
         
         $currentStaffId = $classModel->class_teacher_id ?: Staff::query()
             ->when($this->organizationId(), fn (Builder $query, string $organizationId) => $query->where('organization_id', $organizationId))
@@ -217,6 +235,10 @@ class GradebookWebController extends BaseController
             'selectedAcademicYearId' => $selectedAcademicYearId,
             'selectedAcademicTermId' => $selectedAcademicTermId,
             'currentStaffId' => $currentStaffId,
+            'students' => $students,
+            'ratings' => $ratings,
+            'effectiveItems' => $effectiveItems,
+            'psychomotorItems' => $psychomotorItems,
         ];
     }
 
@@ -278,7 +300,41 @@ class GradebookWebController extends BaseController
 
     public function reports()
     {
-        return view('illimi-gradebook::pages.reports');
+        $reports = $this->queryFor(Report::class)
+            ->with(['student', 'academicClass.section', 'academicYear', 'academicTerm'])
+            ->latest()
+            ->limit(200)
+            ->get();
+
+        $students = $this->queryFor(Student::class)
+            ->where('status', Student::STATUS_ACTIVE)
+            ->with('class.section')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get();
+
+        $classes = $this->queryFor(AcademicClass::class)
+            ->with('section')
+            ->orderBy('name')
+            ->get();
+
+        $academicYears = $this->queryFor(AcademicYear::class)
+            ->orderByDesc('start_date')
+            ->orderBy('name')
+            ->get();
+
+        $academicTerms = $this->queryFor(AcademicTerm::class)
+            ->orderBy('start_date')
+            ->orderBy('name')
+            ->get();
+
+        return \Inertia\Inertia::render('Gradebook/Reports', compact(
+            'reports',
+            'students',
+            'classes',
+            'academicYears',
+            'academicTerms'
+        ));
     }
 
     public function tokens()
@@ -310,7 +366,7 @@ class GradebookWebController extends BaseController
             ->orderBy('name')
             ->get();
 
-        return view('illimi-gradebook::pages.tokens', compact(
+        return \Inertia\Inertia::render('Gradebook/Tokens', compact(
             'tokens',
             'students',
             'classes',
@@ -345,7 +401,7 @@ class GradebookWebController extends BaseController
             ->orderBy('name')
             ->get();
 
-        return view('illimi-gradebook::pages.templates', compact(
+        return \Inertia\Inertia::render('Gradebook/Templates', compact(
             'templates',
             'subjects',
             'classes',
