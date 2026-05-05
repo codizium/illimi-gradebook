@@ -8,7 +8,8 @@ use Illimi\Gradebook\Models\Report;
 class ReportService
 {
     public function __construct(
-        protected AssessmentService $assessmentService
+        protected AssessmentService $assessmentService,
+        protected StudentRatingService $ratingService
     ) {
     }
 
@@ -175,6 +176,15 @@ class ReportService
                 'name' => $academicTerm?->name,
                 'slug' => $academicTerm?->slug,
             ],
+            'template' => [
+                'items' => optional(optional($assessments->first())->template ?? optional($assessments->first())->assessmentTemplate)->items?->map(fn($item) => [
+                    'id' => $item->id,
+                    'label' => $item->label,
+                    'code' => $item->code,
+                    'max_score' => $item->max_score,
+                    'component_type' => $item->component_type,
+                ])->values()->all() ?? [],
+            ],
             'summary' => [
                 'assessment_count' => $assessmentItems->count(),
                 'continuous_assessment_total' => (float) $assessmentItems->sum('continuous_assessment_total'),
@@ -184,8 +194,77 @@ class ReportService
                     ? round((float) $assessmentItems->avg('total_score'), 2)
                     : 0.0,
             ],
-            'assessments' => $assessmentItems->all(),
+            'ratings' => $this->getRatings($criteria),
+            'assessments' => $this->mapAssessmentsWithScores($assessments),
             'generated_at' => now()->toIso8601String(),
+        ];
+    }
+
+    protected function mapAssessmentsWithScores($assessments): array
+    {
+        return $assessments->map(function ($assessment) {
+            $scores = $assessment->items->mapWithKeys(fn($item) => [
+                $item->template_item_id => (float) $item->score
+            ])->all();
+
+            return [
+                'id' => $assessment->id,
+                'subject' => [
+                    'id' => $assessment->subject?->id,
+                    'name' => $assessment->subject?->name,
+                ],
+                'scores' => $scores,
+                'continuous_assessment_total' => (float) $assessment->continuous_assessment_total,
+                'exams' => (float) $assessment->exams,
+                'total_score' => (float) $assessment->total_score,
+                'graded' => $assessment->graded,
+                'grade_scale' => [
+                    'code' => $assessment->gradeScale?->code,
+                    'description' => $assessment->gradeScale?->description,
+                ]
+            ];
+        })->values()->all();
+    }
+
+    protected function getRatings(array $criteria): array
+    {
+        $rating = \Illimi\Gradebook\Models\StudentRating::query()
+            ->where('student_id', $criteria['student_id'])
+            ->where('academic_class_id', $criteria['academic_class_id'])
+            ->where('academic_year_id', $criteria['academic_year_id'])
+            ->where('academic_term_id', $criteria['academic_term_id'])
+            ->first();
+
+        if (!$rating) {
+            return [
+                'effective' => [],
+                'psychomotor' => [],
+            ];
+        }
+
+        $effective = [];
+        foreach ($this->ratingService->effectiveItems() as $key => $label) {
+            $val = $rating->effective_assessment[$key] ?? null;
+            $effective[] = [
+                'label' => $label,
+                'value' => $val,
+                'grade' => $this->ratingService->ratingLabel($val),
+            ];
+        }
+
+        $psychomotor = [];
+        foreach ($this->ratingService->psychomotorItems() as $key => $label) {
+            $val = $rating->psychomotor_assessment[$key] ?? null;
+            $psychomotor[] = [
+                'label' => $label,
+                'value' => $val,
+                'grade' => $this->ratingService->ratingLabel($val),
+            ];
+        }
+
+        return [
+            'effective' => $effective,
+            'psychomotor' => $psychomotor,
         ];
     }
 

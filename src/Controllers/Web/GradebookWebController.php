@@ -155,7 +155,23 @@ class GradebookWebController extends BaseController
         }
 
         if ($templateItems->isEmpty()) {
-            throw new \Exception( 'No template items found for this subject and class and year and term');
+            return [
+                'subject' => $subjectModel,
+                'class' => $classModel,
+                'academicYears' => $academicYears,
+                'academicTerms' => $academicTerms,
+                'gradeScales' => $gradeScales ?? collect(),
+                'termsForYear' => $termsForYear,
+                'selectedAcademicYearId' => $selectedAcademicYearId,
+                'selectedAcademicTermId' => $selectedAcademicTermId,
+                'resolvedTemplate' => null,
+                'templateItems' => collect(),
+                'continuousAssessmentItems' => collect(),
+                'nonContinuousItems' => collect(),
+                'gradebookRows' => collect(),
+                'noTemplate' => true,
+                'noTemplateMessage' => 'No template items found for this subject, class, academic year, and term.',
+            ];
         }
 
         $gradebookRows = $students->map(fn (Student $student) => $this->buildGradebookRow(
