@@ -50,7 +50,19 @@ class GradebookWebController extends BaseController
         return $query;
     }
 
-    public function index()
+    public function dashboard()
+    {
+        $counts = [
+            'assessments' => $this->queryFor(Assessment::class)->count(),
+            'templates' => $this->queryFor(AssessmentTemplate::class)->count(),
+            'reports' => $this->queryFor(Report::class)->count(),
+            'tokens' => $this->queryFor(Token::class)->count(),
+        ];
+
+        return \Inertia\Inertia::render('Gradebook/Dashboard', compact('counts'));
+    }
+
+    public function assessments()
     {
         $subjects = $this->queryFor(Subject::class)
             ->with(['classes.section', 'teachers'])

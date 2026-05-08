@@ -7,8 +7,8 @@ Route::middleware(['web', 'auth', 'organization'])
     ->prefix('gradebook')
     ->name('gradebook.')
     ->group(function () {
-        Route::get('/', [GradebookWebController::class, 'index'])->name('index');
-        Route::get('/assessments', [GradebookWebController::class, 'index'])->name('assessments.index');
+        Route::get('/', [GradebookWebController::class, 'dashboard'])->name('index');
+        Route::get('/assessments', [GradebookWebController::class, 'assessments'])->name('assessments.index');
         Route::get('/templates', [GradebookWebController::class, 'templates'])->name('templates.index');
         Route::get('/reports', [GradebookWebController::class, 'reports'])->name('reports.index');
         Route::get('/tokens', [GradebookWebController::class, 'tokens'])->name('tokens.index');
