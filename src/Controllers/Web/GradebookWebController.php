@@ -65,16 +65,42 @@ class GradebookWebController extends BaseController
     public function assessments()
     {
         $subjects = $this->queryFor(Subject::class)
-            ->with(['classes.section', 'teachers'])
+            ->with(['classes' => function($q) {
+                $q->with('section')->withCount(['students' => function($sq) {
+                    $sq->where('status', \Illimi\Students\Models\Student::STATUS_ACTIVE);
+                }]);
+            }, 'teachers'])
             ->orderBy('name')
             ->get();
 
-        $subjectClassRows = $subjects->flatMap(function (Subject $subject) {
-            return $subject->classes->map(function (AcademicClass $class) use ($subject) {
+        $currentYear = $this->queryFor(AcademicYear::class)->where('status', 'active')->first();
+        $currentTerm = $this->queryFor(AcademicTerm::class)->where('status', 'active')->first();
+
+        $assessmentCounts = collect();
+        if ($currentYear && $currentTerm) {
+            $assessmentCounts = $this->queryFor(Assessment::class)
+                ->where('academic_year_id', $currentYear->id)
+                ->where('academic_term_id', $currentTerm->id)
+                ->selectRaw('subject_id, academic_class_id, count(distinct student_id) as assessed_count')
+                ->groupBy('subject_id', 'academic_class_id')
+                ->get()
+                ->keyBy(function ($item) {
+                    return $item->subject_id . '_' . $item->academic_class_id;
+                });
+        }
+
+        $subjectClassRows = $subjects->flatMap(function (Subject $subject) use ($assessmentCounts) {
+            return $subject->classes->map(function (AcademicClass $class) use ($subject, $assessmentCounts) {
+                $key = $subject->id . '_' . $class->id;
+                $assessedCount = $assessmentCounts->get($key)?->assessed_count ?? 0;
+                $totalStudents = $class->students_count ?? 0;
+
                 return (object) [
                     'subject' => $subject,
                     'class' => $class,
                     'teachers' => $subject->teachers,
+                    'total_students' => $totalStudents,
+                    'assessed_students' => $assessedCount,
                 ];
             });
         })->values();
@@ -136,6 +162,11 @@ class GradebookWebController extends BaseController
         $nonContinuousItems = collect();
         $studentRatings = collect();
         $ratingService = app(StudentRatingService::class);
+        $completionStats = [
+            'total_students' => $students->count(),
+            'assessed_students' => 0,
+            'completion_percent' => 0,
+        ];
 
         if ($selectedAcademicYearId && $selectedAcademicTermId) {
             $resolvedTemplate = app(AssessmentTemplateService::class)->resolveForContext([
@@ -163,6 +194,17 @@ class GradebookWebController extends BaseController
                 ->get()
                 ->keyBy('student_id');
 
+            $assessedCount = $assessments
+                ->filter(fn (Assessment $assessment) => $assessment->items?->isNotEmpty())
+                ->count();
+
+            $completionStats = [
+                'total_students' => $students->count(),
+                'assessed_students' => $assessedCount,
+                'completion_percent' => $students->count() > 0
+                    ? (int) round(($assessedCount / $students->count()) * 100)
+                    : 0,
+            ];
 
         }
 
@@ -183,6 +225,7 @@ class GradebookWebController extends BaseController
                 'gradebookRows' => collect(),
                 'noTemplate' => true,
                 'noTemplateMessage' => 'No template items found for this subject, class, academic year, and term.',
+                'completionStats' => $completionStats,
             ];
         }
 
@@ -210,6 +253,7 @@ class GradebookWebController extends BaseController
             'continuousAssessmentItems' => $continuousAssessmentItems,
             'nonContinuousItems' => $nonContinuousItems,
             'gradebookRows' => $gradebookRows,
+            'completionStats' => $completionStats,
         ];
     }
 

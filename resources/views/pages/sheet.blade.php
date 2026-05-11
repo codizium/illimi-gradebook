@@ -324,9 +324,11 @@
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             const rowTimers = new WeakMap();
 
+            const round2 = (value) => Math.round(value * 100) / 100;
+
             const numberValue = (value) => {
                 const parsed = parseFloat(value);
-                return Number.isFinite(parsed) ? parsed : 0;
+                return Number.isFinite(parsed) ? round2(parsed) : 0;
             };
 
             const setRowState = (row, state, message) => {
@@ -456,6 +458,11 @@
             document.querySelectorAll('.grade-input').forEach((input) => {
                 const row = input.closest('tr');
 
+                // Ensure consistent 2dp formatting on initial render.
+                if (input.value !== '' && input.value !== null && input.value !== undefined) {
+                    input.value = numberValue(input.value).toFixed(2);
+                }
+
                 input.addEventListener('input', () => {
                     const maxScore = input.dataset.maxScore === '' ? null : numberValue(input.dataset.maxScore);
                     const currentValue = numberValue(input.value);
@@ -480,6 +487,8 @@
                     }
 
                     input.classList.remove('is-invalid');
+                    input.value = numberValue(input.value).toFixed(2);
+                    updateRowTotals(row);
                     saveRow(row);
                 });
             });
