@@ -18,6 +18,7 @@ use Illimi\Gradebook\Services\AssessmentTemplateService;
 use Illimi\Gradebook\Services\StudentRatingService;
 use Illimi\Staff\Models\Staff;
 use Illimi\Students\Models\Student;
+use Illuminate\Http\Request;
 
 class GradebookWebController extends BaseController
 {
@@ -409,12 +410,14 @@ class GradebookWebController extends BaseController
         ));
     }
 
-    public function tokens()
+    public function tokens(Request $request)
     {
-        $tokens = $this->queryFor(Token::class)
+        $perPage = max(1, min((int) $request->query('per_page', 24), 100));
+
+        $tokens = \Inertia\Inertia::scroll(fn () => $this->queryFor(Token::class)
             ->with(['student', 'academicClass', 'academicYear', 'academicTerm'])
             ->latest()
-            ->get();
+            ->paginate($perPage));
 
         $students = $this->queryFor(Student::class)
             ->where('status', Student::STATUS_ACTIVE)
@@ -445,6 +448,87 @@ class GradebookWebController extends BaseController
             'academicYears',
             'academicTerms'
         ));
+    }
+
+    public function downloadToken(string $token)
+    {
+        $record = $this->queryFor(Token::class)
+            ->with(['student', 'academicClass.section', 'academicYear', 'academicTerm'])
+            ->where('id', $token)
+            ->firstOrFail();
+
+        $tokens = collect([$record]);
+
+        $meta = [
+            'scope' => 'token',
+            'generated_at' => now()->toIso8601String(),
+        ];
+
+        $fileName = 'Token_' . ($record->student?->full_name ? str_replace(' ', '_', $record->student->full_name) : $record->student_id)
+            . '_' . now()->format('Y-m-d_His');
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('illimi-gradebook::pdf.tokens', [
+            'tokens' => $tokens,
+            'meta' => $meta,
+        ]);
+
+        return $pdf->download($fileName . '.pdf');
+    }
+
+    public function exportTokens(Request $request)
+    {
+        $scope = (string) $request->query('scope', 'all'); // all | class | student
+        $studentId = $request->query('student_id');
+        $classId = $request->query('academic_class_id');
+        $yearId = $request->query('academic_year_id');
+        $termId = $request->query('academic_term_id');
+
+        if (!in_array($scope, ['all', 'class', 'student'], true)) {
+            $scope = 'all';
+        }
+
+        if ($scope === 'student' && empty($studentId)) {
+            return redirect()->back()->with('error', 'Select a student to export.');
+        }
+        if ($scope === 'class' && empty($classId)) {
+            return redirect()->back()->with('error', 'Select a class to export.');
+        }
+
+        $query = $this->queryFor(Token::class)
+            ->with(['student', 'academicClass.section', 'academicYear', 'academicTerm'])
+            ->latest();
+
+        if (!empty($yearId)) {
+            $query->where('academic_year_id', $yearId);
+        }
+        if (!empty($termId)) {
+            $query->where('academic_term_id', $termId);
+        }
+
+        if ($scope === 'student') {
+            $query->where('student_id', $studentId);
+        } elseif ($scope === 'class') {
+            $query->where('academic_class_id', $classId);
+        }
+
+        $tokens = $query->get();
+        if ($tokens->isEmpty()) {
+            return redirect()->back()->with('error', 'No tokens found for this export.');
+        }
+
+        $meta = [
+            'scope' => $scope,
+            'generated_at' => now()->toIso8601String(),
+        ];
+
+        $fileName = 'Tokens_' . strtoupper($scope) . '_' . now()->format('Y-m-d_His');
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('illimi-gradebook::pdf.tokens', [
+            'tokens' => $tokens,
+            'meta' => $meta,
+        ]);
+
+        return $pdf->download($fileName . '.pdf');
     }
 
     public function templates()

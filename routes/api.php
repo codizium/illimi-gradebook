@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('api/v1/gradebook')
     ->name('v1.gradebook.')
-    ->middleware(['api', 'auth:sanctum', 'organization'])
+    ->middleware(['api', 'auth:sanctum', 'organization', 'core.role:admin|super-admin|principal|teacher'])
     ->group(function () {
     Route::apiResource('templates', AssessmentTemplateController::class);
     Route::apiResource('assessments', AssessmentController::class);
