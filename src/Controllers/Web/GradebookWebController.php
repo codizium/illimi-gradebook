@@ -22,6 +22,74 @@ use Illuminate\Http\Request;
 
 class GradebookWebController extends BaseController
 {
+    protected function selectedAcademicYearId(): ?string
+    {
+        return request('academic_year_id')
+            ?: session('academic_context.academic_year_id');
+    }
+
+    protected function selectedAcademicTermId(): ?string
+    {
+        return request('academic_term_id')
+            ?: session('academic_context.academic_term_id');
+    }
+
+    protected function selectedAcademicPeriod(): array
+    {
+        $years = $this->queryFor(AcademicYear::class)->orderByDesc('start_date')->orderBy('name')->get();
+        $terms = $this->queryFor(AcademicTerm::class)->orderBy('start_date')->orderBy('name')->get();
+
+        $selectedAcademicYearId = $this->selectedAcademicYearId()
+            ?: $years->firstWhere('status', 'active')?->id
+            ?: $years->first()?->id;
+
+        $termsForYear = $terms
+            ->filter(fn (AcademicTerm $term) => ! $selectedAcademicYearId || $term->academic_year_id === $selectedAcademicYearId)
+            ->values();
+
+        $selectedAcademicTermId = $this->selectedAcademicTermId()
+            ?: $termsForYear->firstWhere('status', 'active')?->id
+            ?: $termsForYear->first()?->id;
+
+        if ($selectedAcademicTermId && ! $termsForYear->contains(fn (AcademicTerm $term) => $term->id === $selectedAcademicTermId)) {
+            $selectedAcademicTermId = $termsForYear->firstWhere('status', 'active')?->id ?: $termsForYear->first()?->id;
+        }
+
+        return [
+            'academicYears' => $years,
+            'academicTerms' => $terms,
+            'termsForYear' => $termsForYear,
+            'selectedAcademicYearId' => $selectedAcademicYearId,
+            'selectedAcademicTermId' => $selectedAcademicTermId,
+        ];
+    }
+
+    protected function currentRoleContext(): string
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return 'admin';
+        }
+
+        if (method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['admin', 'super-admin', 'principal', 'organization-admin'])) {
+            return 'admin';
+        }
+
+        if (method_exists($user, 'hasRole') && $user->hasRole('teacher')) {
+            return 'teacher';
+        }
+
+        if (method_exists($user, 'hasRole') && $user->hasRole('student')) {
+            return 'student';
+        }
+
+        if (method_exists($user, 'hasRole') && $user->hasRole('parent')) {
+            return 'parent';
+        }
+
+        return 'admin';
+    }
+
     protected function organizationId(): ?string
     {
         return optional(function_exists('organization') ? organization() : null)->id
@@ -31,15 +99,13 @@ class GradebookWebController extends BaseController
     protected function queryFor(string $modelClass): Builder
     {
         $query = $modelClass::query();
+        $roleContext = $this->currentRoleContext();
 
-        // Apply role-based scopes in priority order.
-        // TeacherScope is checked first because a Teacher who is also a Parent
-        // should use Teacher-level visibility in the academic context.
-        if (method_exists($modelClass, 'scopeTeacher')) {
+        if ($roleContext === 'teacher' && method_exists($modelClass, 'scopeTeacher')) {
             $query->teacher();
-        } elseif (method_exists($modelClass, 'scopeStudent')) {
+        } elseif ($roleContext === 'student' && method_exists($modelClass, 'scopeStudent')) {
             $query->student();
-        } elseif (method_exists($modelClass, 'scopeParent')) {
+        } elseif ($roleContext === 'parent' && method_exists($modelClass, 'scopeParent')) {
             $query->parent();
         }
 
@@ -60,7 +126,49 @@ class GradebookWebController extends BaseController
             'tokens' => $this->queryFor(Token::class)->count(),
         ];
 
-        return \Inertia\Inertia::render('Gradebook/Dashboard', compact('counts'));
+        $period = $this->selectedAcademicPeriod();
+        $activeYear = $period['academicYears']->firstWhere('id', $period['selectedAcademicYearId']);
+        $activeTerm = $period['academicTerms']->firstWhere('id', $period['selectedAcademicTermId']);
+
+        $analyticsRows = collect();
+        if ($activeYear && $activeTerm) {
+            $analyticsRows = $this->queryFor(Assessment::class)
+                ->with(['subject', 'items.templateItem'])
+                ->where('academic_year_id', $activeYear->id)
+                ->where('academic_term_id', $activeTerm->id)
+                ->get()
+                ->groupBy('subject_id')
+                ->map(function ($subjectAssessments) {
+                    $first = $subjectAssessments->first();
+                    $subjectName = $first?->subject?->name ?? 'Unknown Subject';
+
+                    $studentCount = $subjectAssessments->pluck('student_id')->filter()->unique()->count();
+                    $averageTotal = round($subjectAssessments->avg(fn ($assessment) => (float) $assessment->total_score), 2);
+                    $passCount = $subjectAssessments->filter(fn ($assessment) => ((float) $assessment->total_score) >= 50)->count();
+                    $passRate = $subjectAssessments->count() > 0
+                        ? round(($passCount / $subjectAssessments->count()) * 100, 1)
+                        : 0;
+
+                    return [
+                        'subject_id' => $first?->subject_id,
+                        'subject_name' => $subjectName,
+                        'students_assessed' => $studentCount,
+                        'records' => $subjectAssessments->count(),
+                        'average_score' => $averageTotal,
+                        'pass_rate' => $passRate,
+                    ];
+                })
+                ->sortByDesc('average_score')
+                ->values();
+        }
+
+        $subjectPerformance = [
+            'academic_year' => $activeYear?->name,
+            'academic_term' => $activeTerm?->name,
+            'series' => $analyticsRows,
+        ];
+
+        return \Inertia\Inertia::render('Gradebook/Dashboard', compact('counts', 'subjectPerformance'));
     }
 
     public function assessments()
@@ -74,8 +182,9 @@ class GradebookWebController extends BaseController
             ->orderBy('name')
             ->get();
 
-        $currentYear = $this->queryFor(AcademicYear::class)->where('status', 'active')->first();
-        $currentTerm = $this->queryFor(AcademicTerm::class)->where('status', 'active')->first();
+        $period = $this->selectedAcademicPeriod();
+        $currentYear = $period['academicYears']->firstWhere('id', $period['selectedAcademicYearId']);
+        $currentTerm = $period['academicTerms']->firstWhere('id', $period['selectedAcademicTermId']);
 
         $assessmentCounts = collect();
         if ($currentYear && $currentTerm) {
@@ -135,19 +244,15 @@ class GradebookWebController extends BaseController
             ->with(['section', 'classTeacher'])
             ->findOrFail($class);
 
-        $academicYears = $this->queryFor(AcademicYear::class)->orderByDesc('start_date')->orderBy('name')->get();
-        $academicTerms = $this->queryFor(AcademicTerm::class)->orderBy('start_date')->orderBy('name')->get();
+        $period = $this->selectedAcademicPeriod();
+        $academicYears = $period['academicYears'];
+        $academicTerms = $period['academicTerms'];
         $gradeScales = $this->queryFor(GradeScale::class)
             ->orderByDesc('min_score')
             ->get();
-
-        $selectedAcademicYearId = request('academic_year_id') ?: $academicYears->first()?->id;
-
-        $termsForYear = $academicTerms
-            ->filter(fn (AcademicTerm $term) => ! $selectedAcademicYearId || $term->academic_year_id === $selectedAcademicYearId)
-            ->values();
-
-        $selectedAcademicTermId = request('academic_term_id') ?: $termsForYear->first()?->id ?: $academicTerms->first()?->id;
+        $selectedAcademicYearId = $period['selectedAcademicYearId'];
+        $selectedAcademicTermId = $period['selectedAcademicTermId'];
+        $termsForYear = $period['termsForYear'];
 
         $students = $this->queryFor(Student::class)
             ->with('class')
@@ -264,16 +369,12 @@ class GradebookWebController extends BaseController
             ->with(['section', 'classTeacher'])
             ->findOrFail($class);
 
-        $academicYears = $this->queryFor(AcademicYear::class)->orderByDesc('start_date')->orderBy('name')->get();
-        $academicTerms = $this->queryFor(AcademicTerm::class)->orderBy('start_date')->orderBy('name')->get();
-
-        $selectedAcademicYearId = request('academic_year_id') ?: $academicYears->first()?->id;
-
-        $termsForYear = $academicTerms
-            ->filter(fn (AcademicTerm $term) => ! $selectedAcademicYearId || $term->academic_year_id === $selectedAcademicYearId)
-            ->values();
-
-        $selectedAcademicTermId = request('academic_term_id') ?: $termsForYear->first()?->id ?: $academicTerms->first()?->id;
+        $period = $this->selectedAcademicPeriod();
+        $academicYears = $period['academicYears'];
+        $academicTerms = $period['academicTerms'];
+        $selectedAcademicYearId = $period['selectedAcademicYearId'];
+        $selectedAcademicTermId = $period['selectedAcademicTermId'];
+        $termsForYear = $period['termsForYear'];
 
         $students = $this->queryFor(Student::class)
             ->with('class')
@@ -373,20 +474,60 @@ class GradebookWebController extends BaseController
 
     public function reports()
     {
+        $isTeacherContext = $this->currentRoleContext() === 'teacher';
+        $teacherStudentIds = collect();
+        $teacherClassIds = collect();
+
+        if ($isTeacherContext) {
+            $teacherAssessments = $this->queryFor(Assessment::class)
+                ->select(['student_id', 'academic_class_id'])
+                ->whereNotNull('student_id')
+                ->whereNotNull('academic_class_id')
+                ->get();
+
+            $teacherStudentIds = $teacherAssessments->pluck('student_id')->filter()->unique()->values();
+            $teacherClassIds = $teacherAssessments->pluck('academic_class_id')->filter()->unique()->values();
+        }
+
         $reports = $this->queryFor(Report::class)
             ->with(['student', 'academicClass.section', 'academicYear', 'academicTerm'])
+            ->when($isTeacherContext, function ($query) use ($teacherStudentIds, $teacherClassIds) {
+                $query->where(function ($q) use ($teacherStudentIds, $teacherClassIds) {
+                    if ($teacherStudentIds->isNotEmpty()) {
+                        $q->whereIn('student_id', $teacherStudentIds->all());
+                    }
+
+                    if ($teacherClassIds->isNotEmpty()) {
+                        $q->orWhereIn('academic_class_id', $teacherClassIds->all());
+                    }
+
+                    if ($teacherStudentIds->isEmpty() && $teacherClassIds->isEmpty()) {
+                        $q->whereRaw('1 = 0');
+                    }
+                });
+            })
             ->latest()
             ->limit(200)
             ->get();
 
-        $students = $this->queryFor(Student::class)
+        $students = Student::query()
+            ->when(
+                $this->organizationId(),
+                fn(Builder $query, string $organizationId) => $query->where('organization_id', $organizationId)
+            )
             ->where('status', Student::STATUS_ACTIVE)
+            ->when($isTeacherContext, fn ($query) => $query->whereIn('id', $teacherStudentIds->all()))
             ->with('class.section')
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get();
 
-        $classes = $this->queryFor(AcademicClass::class)
+        $classes = AcademicClass::query()
+            ->when(
+                $this->organizationId(),
+                fn(Builder $query, string $organizationId) => $query->where('organization_id', $organizationId)
+            )
+            ->when($isTeacherContext, fn ($query) => $query->whereIn('id', $teacherClassIds->all()))
             ->with('section')
             ->orderBy('name')
             ->get();

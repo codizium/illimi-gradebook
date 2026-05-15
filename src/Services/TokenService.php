@@ -48,7 +48,8 @@ class TokenService
     {
         $payload = $this->normalizePayload($data);
 
-        $token = Token::query()->updateOrCreate([
+        $token = $this->baseQuery($payload['organization_id'])->updateOrCreate([
+            'organization_id' => $payload['organization_id'],
             'student_id' => $payload['student_id'],
             'academic_class_id' => $payload['academic_class_id'],
             'academic_year_id' => $payload['academic_year_id'],
@@ -62,7 +63,7 @@ class TokenService
 
     public function update(string $id, array $data): ?Token
     {
-        $token = Token::find($id);
+        $token = $this->baseQuery()->find($id);
 
         if (! $token) {
             return null;
@@ -89,13 +90,14 @@ class TokenService
 
     public function delete(string $id): bool
     {
-        $token = Token::find($id);
+        $token = $this->baseQuery()->find($id);
 
         if (! $token) {
             return false;
         }
 
         Report::query()
+            ->when($token->organization_id, fn ($query, $organizationId) => $query->where('organization_id', $organizationId))
             ->where('student_id', $token->student_id)
             ->where('academic_class_id', $token->academic_class_id)
             ->where('academic_year_id', $token->academic_year_id)
@@ -137,7 +139,8 @@ class TokenService
     {
         $payload = $this->normalizePayload($scope);
 
-        $token = Token::query()->where([
+        $token = $this->baseQuery($payload['organization_id'])->where([
+            'organization_id' => $payload['organization_id'],
             'student_id' => $payload['student_id'],
             'academic_class_id' => $payload['academic_class_id'],
             'academic_year_id' => $payload['academic_year_id'],
@@ -239,12 +242,18 @@ class TokenService
 
     protected function query()
     {
-        return Token::query()->with([
+        return $this->baseQuery()->with([
             'student',
             'academicClass',
             'academicYear',
             'academicTerm',
             'generatedBy',
         ]);
+    }
+
+    protected function baseQuery(?string $organizationId = null)
+    {
+        return Token::query()
+            ->when($organizationId ?? $this->organizationId(), fn ($query, $orgId) => $query->where('organization_id', $orgId));
     }
 }

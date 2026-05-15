@@ -32,10 +32,6 @@ class AssessmentService
             }
         }
 
-        if (array_key_exists('graded', $filters) && $filters['graded'] !== null && $filters['graded'] !== '') {
-            $query->where('graded', $filters['graded']);
-        }
-
         return $query->latest()->paginate($perPage);
     }
 

@@ -108,7 +108,7 @@ class AssessmentTemplateService
             })
             ->values();
 
-        return $templates->firstWhere('is_default', false) ?? $templates->first();
+        return $templates->firstWhere('is_default', true) ?? $templates->first();
     }
 
     protected function syncItems(AssessmentTemplate $template, array $items): void

@@ -36,19 +36,29 @@ class StudentRatingService
 
     public function store(array $data): StudentRating
     {
-        $payload = [
-            'organization_id' => $data['organization_id'] ?? null,
-            'staff_id' => $data['staff_id'] ?? null,
-            'effective_assessment' => $this->normalizeRatings($data['effective_assessment'] ?? [], self::EFFECTIVE_ASSESSMENT_ITEMS),
-            'psychomotor_assessment' => $this->normalizeRatings($data['psychomotor_assessment'] ?? [], self::PSYCHOMOTOR_ASSESSMENT_ITEMS),
-        ];
-
-        return StudentRating::query()->updateOrCreate([
+        $scope = [
             'student_id' => $data['student_id'],
             'academic_class_id' => $data['academic_class_id'],
             'academic_year_id' => $data['academic_year_id'],
             'academic_term_id' => $data['academic_term_id'],
-        ], $payload);
+        ];
+
+        $existing = StudentRating::query()->where($scope)->first();
+        $effectiveSource = array_key_exists('effective_assessment', $data)
+            ? ($data['effective_assessment'] ?? [])
+            : ($existing?->effective_assessment ?? []);
+        $psychomotorSource = array_key_exists('psychomotor_assessment', $data)
+            ? ($data['psychomotor_assessment'] ?? [])
+            : ($existing?->psychomotor_assessment ?? []);
+
+        $payload = [
+            'organization_id' => $data['organization_id'] ?? null,
+            'staff_id' => $data['staff_id'] ?? null,
+            'effective_assessment' => $this->normalizeRatings($effectiveSource, self::EFFECTIVE_ASSESSMENT_ITEMS),
+            'psychomotor_assessment' => $this->normalizeRatings($psychomotorSource, self::PSYCHOMOTOR_ASSESSMENT_ITEMS),
+        ];
+
+        return StudentRating::query()->updateOrCreate($scope, $payload);
     }
 
     public function effectiveItems(): array

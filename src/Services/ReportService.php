@@ -40,7 +40,8 @@ class ReportService
     {
         $payload = $this->normalizePayload($data);
 
-        $report = Report::query()->updateOrCreate([
+        $report = $this->baseQuery($payload['organization_id'] ?? null)->updateOrCreate([
+            'organization_id' => $payload['organization_id'] ?? $this->organizationId(),
             'student_id' => $payload['student_id'],
             'academic_class_id' => $payload['academic_class_id'],
             'academic_year_id' => $payload['academic_year_id'],
@@ -52,7 +53,7 @@ class ReportService
 
     public function update(string $id, array $data): ?Report
     {
-        $report = Report::find($id);
+        $report = $this->baseQuery()->find($id);
 
         if (!$report) {
             return null;
@@ -74,7 +75,7 @@ class ReportService
 
     public function delete(string $id): bool
     {
-        $report = Report::find($id);
+        $report = $this->baseQuery()->find($id);
 
         if (!$report) {
             return false;
@@ -90,6 +91,8 @@ class ReportService
 
     protected function normalizePayload(array $data): array
     {
+        $data['organization_id'] = $data['organization_id'] ?? $this->organizationId();
+
         if (!array_key_exists('code', $data) || $data['code'] === '') {
             $data['code'] = null;
         }
@@ -126,6 +129,11 @@ class ReportService
         }
 
         $assessmentItems = $assessments->map(function ($assessment) {
+            $examTotal = (float) $assessment->items
+                ->filter(fn ($item) => $item->templateItem?->component_type === 'exam')
+                ->sum('score');
+            $gradeCode = $assessment->gradeScale?->code ?? $assessment->getGrade();
+
             return [
                 'id' => $assessment->id,
                 'subject' => [
@@ -143,14 +151,15 @@ class ReportService
                     'name' => $assessment->gradeScale?->name,
                     'code' => $assessment->gradeScale?->code,
                 ],
-                'assignment1' => (float) $assessment->assignment1,
-                'assignment2' => (float) $assessment->assignment2,
-                'test1' => (float) $assessment->test1,
-                'test2' => (float) $assessment->test2,
-                'exams' => (float) $assessment->exams,
+                'assignment1' => 0.0,
+                'assignment2' => 0.0,
+                'test1' => 0.0,
+                'test2' => 0.0,
+                'exams' => $examTotal,
+                'exam_total' => $examTotal,
                 'continuous_assessment_total' => (float) $assessment->continuous_assessment_total,
                 'total_score' => (float) $assessment->total_score,
-                'graded' => $assessment->graded,
+                'graded' => $gradeCode,
             ];
         })->values();
 
@@ -188,7 +197,7 @@ class ReportService
             'summary' => [
                 'assessment_count' => $assessmentItems->count(),
                 'continuous_assessment_total' => (float) $assessmentItems->sum('continuous_assessment_total'),
-                'exam_total' => (float) $assessmentItems->sum('exams'),
+                'exam_total' => (float) $assessmentItems->sum('exam_total'),
                 'overall_total' => (float) $assessmentItems->sum('total_score'),
                 'average_score' => $assessmentItems->count() > 0
                     ? round((float) $assessmentItems->avg('total_score'), 2)
@@ -203,6 +212,10 @@ class ReportService
     protected function mapAssessmentsWithScores($assessments): array
     {
         return $assessments->map(function ($assessment) {
+            $examTotal = (float) $assessment->items
+                ->filter(fn ($item) => $item->templateItem?->component_type === 'exam')
+                ->sum('score');
+            $gradeCode = $assessment->gradeScale?->code ?? $assessment->getGrade();
             $scores = $assessment->items->mapWithKeys(fn($item) => [
                 $item->template_item_id => (float) $item->score
             ])->all();
@@ -215,11 +228,11 @@ class ReportService
                 ],
                 'scores' => $scores,
                 'continuous_assessment_total' => (float) $assessment->continuous_assessment_total,
-                'exams' => (float) $assessment->exams,
+                'exams' => $examTotal,
                 'total_score' => (float) $assessment->total_score,
-                'graded' => $assessment->graded,
+                'graded' => $gradeCode,
                 'grade_scale' => [
-                    'code' => $assessment->gradeScale?->code,
+                    'code' => $gradeCode,
                     'description' => $assessment->gradeScale?->description,
                 ]
             ];
@@ -270,11 +283,23 @@ class ReportService
 
     protected function query()
     {
-        return Report::query()->with([
+        return $this->baseQuery()->with([
             'student',
             'academicClass',
             'academicYear',
             'academicTerm',
         ]);
+    }
+
+    protected function baseQuery(?string $organizationId = null)
+    {
+        return Report::query()
+            ->when($organizationId ?? $this->organizationId(), fn ($query, $orgId) => $query->where('organization_id', $orgId));
+    }
+
+    protected function organizationId(): ?string
+    {
+        return optional(function_exists('organization') ? organization() : null)->id
+            ?? auth()->user()?->organization_id;
     }
 }

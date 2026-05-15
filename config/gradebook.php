@@ -43,4 +43,9 @@ return [
             ],
         ],
     ],
+    'ops' => [
+        'enabled' => env('GRADEBOOK_OPS_ENABLED', true),
+        'completion_threshold_percent' => (int) env('GRADEBOOK_COMPLETION_THRESHOLD_PERCENT', 80),
+        'health_checks_schedule' => env('GRADEBOOK_HEALTH_CHECKS_SCHEDULE', '0 1 * * *'),
+    ],
 ];

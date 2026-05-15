@@ -78,14 +78,12 @@ class AssessmentResource extends JsonResource
                     'role' => $this->staff?->role,
                 ];
             }),
-            'assignment1' => (float) $this->assignment1,
-            'assignment2' => (float) $this->assignment2,
-            'test1' => (float) $this->test1,
-            'test2' => (float) $this->test2,
-            'exams' => (float) $this->exams,
             'continuous_assessment_total' => (float) $this->continuous_assessment_total,
+            'exam_total' => (float) $this->whenLoaded('items', fn () => $this->items
+                ->filter(fn ($item) => $item->templateItem?->component_type === 'exam')
+                ->sum('score'), 0),
             'total_score' => (float) $this->total_score,
-            'graded' => $this->graded,
+            'grade_code' => $this->gradeScale?->code ?? $this->getGrade(),
             'items' => $this->whenLoaded('items', function () {
                 return $this->items->map(fn ($item) => [
                     'id' => $item->id,

@@ -17,7 +17,7 @@ class UpdateTokenRequest extends FormRequest
 
     public function rules(): array
     {
-        $tokenId = (string) $this->route('id');
+        $tokenId = (string) $this->route('token');
 
         return [
             'student_id' => ['sometimes', 'uuid', $this->scopedExists('illimi_students')],
