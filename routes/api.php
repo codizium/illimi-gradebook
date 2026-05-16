@@ -2,6 +2,7 @@
 
 use Illimi\Gradebook\Controllers\V1\AssessmentController;
 use Illimi\Gradebook\Controllers\V1\AssessmentTemplateController;
+use Illimi\Gradebook\Controllers\V1\GradebookContextController;
 use Illimi\Gradebook\Controllers\V1\HealthController;
 use Illimi\Gradebook\Controllers\V1\ReportController;
 use Illimi\Gradebook\Controllers\V1\StudentRatingController;
@@ -12,6 +13,28 @@ Route::prefix('api/v1/gradebook')
     ->name('v1.gradebook.')
     ->middleware(['api', 'auth:sanctum', 'organization', 'core.role:admin|super-admin|principal|teacher'])
     ->group(function () {
+    Route::get('context/dashboard', [GradebookContextController::class, 'dashboard'])
+        ->middleware('throttle:60,1')
+        ->name('context.dashboard');
+    Route::get('context/assessments', [GradebookContextController::class, 'assessmentsIndex'])
+        ->middleware('throttle:60,1')
+        ->name('context.assessments');
+    Route::get('context/sheet', [GradebookContextController::class, 'sheet'])
+        ->middleware('throttle:60,1')
+        ->name('context.sheet');
+    Route::get('context/ratings', [GradebookContextController::class, 'ratings'])
+        ->middleware('throttle:60,1')
+        ->name('context.ratings');
+    Route::get('context/reports', [GradebookContextController::class, 'reports'])
+        ->middleware('throttle:60,1')
+        ->name('context.reports');
+    Route::get('context/tokens', [GradebookContextController::class, 'tokens'])
+        ->middleware('throttle:60,1')
+        ->name('context.tokens');
+    Route::get('context/templates', [GradebookContextController::class, 'templates'])
+        ->middleware('throttle:60,1')
+        ->name('context.templates');
+
     Route::apiResource('templates', AssessmentTemplateController::class);
     Route::apiResource('assessments', AssessmentController::class);
     Route::post('student-ratings', [StudentRatingController::class, 'store'])->name('student_ratings.store');
