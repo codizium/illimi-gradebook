@@ -3,7 +3,9 @@
 namespace Illimi\Gradebook\Services;
 
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Validation\ValidationException;
 use Illimi\Gradebook\Models\Report;
+use Illimi\Gradebook\Models\Token;
 
 class ReportService
 {
@@ -86,6 +88,9 @@ class ReportService
 
     public function generate(array $criteria): Report
     {
+        $token = $this->resolveScopedToken($criteria, true);
+        $criteria['code'] = $token->code;
+
         return $this->store($criteria);
     }
 
@@ -93,7 +98,12 @@ class ReportService
     {
         $data['organization_id'] = $data['organization_id'] ?? $this->organizationId();
 
-        if (!array_key_exists('code', $data) || $data['code'] === '') {
+        $token = $this->resolveScopedToken($data, ! empty($data['student_id']) && ! empty($data['academic_year_id']) && ! empty($data['academic_term_id']) && ! empty($data['academic_class_id']));
+        $tokenCode = $token?->code;
+
+        if ((! array_key_exists('code', $data) || $data['code'] === '') && $tokenCode) {
+            $data['code'] = $tokenCode;
+        } elseif (! array_key_exists('code', $data) || $data['code'] === '') {
             $data['code'] = null;
         }
 
@@ -106,6 +116,11 @@ class ReportService
 
     protected function buildPayload(array $criteria): array
     {
+        $tokenCode = trim((string) ($criteria['code'] ?? ''));
+        if ($tokenCode === '') {
+            $tokenCode = $this->resolveScopedToken($criteria)?->code ?? '';
+        }
+
         $assessments = $this->assessmentService->assessmentsForReport($criteria);
         $student = optional($assessments->first())->student;
         $academicClass = optional($assessments->first())->academicClass;
@@ -202,11 +217,43 @@ class ReportService
                 'average_score' => $assessmentItems->count() > 0
                     ? round((float) $assessmentItems->avg('total_score'), 2)
                     : 0.0,
+                'token' => $tokenCode !== '' ? $tokenCode : null,
             ],
+            'token' => $tokenCode !== '' ? $tokenCode : null,
             'ratings' => $this->getRatings($criteria),
             'assessments' => $this->mapAssessmentsWithScores($assessments),
             'generated_at' => now()->toIso8601String(),
         ];
+    }
+
+    protected function resolveScopedToken(array $criteria, bool $required = false): ?Token
+    {
+        $organizationId = $criteria['organization_id'] ?? $this->organizationId();
+        $studentId = $criteria['student_id'] ?? null;
+        $academicClassId = $criteria['academic_class_id'] ?? null;
+        $academicYearId = $criteria['academic_year_id'] ?? null;
+        $academicTermId = $criteria['academic_term_id'] ?? null;
+
+        if (! $studentId || ! $academicClassId || ! $academicYearId || ! $academicTermId) {
+            return null;
+        }
+
+        $token = Token::query()
+            ->when($organizationId, fn ($query) => $query->where('organization_id', $organizationId))
+            ->where('student_id', $studentId)
+            ->where('academic_class_id', $academicClassId)
+            ->where('academic_year_id', $academicYearId)
+            ->where('academic_term_id', $academicTermId)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $token && $required) {
+            throw ValidationException::withMessages([
+                'token' => ['No active result token exists for this student in the selected class, academic year, and term. Generate the token first before creating the report.'],
+            ]);
+        }
+
+        return $token;
     }
 
     protected function mapAssessmentsWithScores($assessments): array
