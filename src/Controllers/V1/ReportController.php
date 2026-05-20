@@ -4,6 +4,7 @@ namespace Illimi\Gradebook\Controllers\V1;
 
 use Codizium\Core\Controllers\BaseController;
 use Codizium\Core\Helpers\CoreJsonResponse;
+use Codizium\Core\Traits\SecureResponse;
 use Illuminate\Http\Request;
 use Illimi\Gradebook\Events\GradebookEntityChanged;
 use Illimi\Gradebook\Requests\StoreReportRequest;
@@ -14,6 +15,8 @@ use Illimi\Gradebook\Services\ReportService;
 
 class ReportController extends BaseController
 {
+    use SecureResponse;
+
     public function __construct(
         protected ReportService $service,
         protected CoreJsonResponse $response
@@ -32,34 +35,34 @@ class ReportController extends BaseController
 
         $reports = $this->service->list($filters, $perPage);
 
-        return $this->response->success(new ReportCollection($reports), 'Reports retrieved successfully');
+        return $this->respondWithSecurity(new ReportCollection($reports), 'Reports retrieved successfully', 200, $request);
     }
 
     public function store(StoreReportRequest $request)
     {
         $report = $this->service->store($request->validated());
-        event(new GradebookEntityChanged('report', 'saved', (new ReportResource($report))->resolve()));
+        event(new GradebookEntityChanged('report', 'saved', $this->broadcastPayload($report)));
 
-        return $this->response->success(new ReportResource($report), 'Report saved successfully', 201);
+        return $this->respondWithSecurity(new ReportResource($report), 'Report saved successfully', 201, $request);
     }
 
     public function generate(StoreReportRequest $request)
     {
         $report = $this->service->generate($request->validated());
-        event(new GradebookEntityChanged('report', 'generated', (new ReportResource($report))->resolve()));
+        event(new GradebookEntityChanged('report', 'generated', $this->broadcastPayload($report)));
 
-        return $this->response->success(new ReportResource($report), 'Report generated successfully', 201);
+        return $this->respondWithSecurity(new ReportResource($report), 'Report generated successfully', 201, $request);
     }
 
-    public function show(string $id)
+    public function show(Request $request, string $id)
     {
         $report = $this->service->findById($id);
 
         if (!$report) {
-            return $this->response->error('Report not found', 404);
+            return $this->respondErrorWithSecurity('Report not found', 404, [], $request);
         }
 
-        return $this->response->success(new ReportResource($report), 'Report retrieved successfully');
+        return $this->respondWithSecurity(new ReportResource($report), 'Report retrieved successfully', 200, $request);
     }
 
     public function update(UpdateReportRequest $request, string $id)
@@ -67,27 +70,56 @@ class ReportController extends BaseController
         $report = $this->service->update($id, $request->validated());
 
         if (!$report) {
-            return $this->response->error('Report not found', 404);
+            return $this->respondErrorWithSecurity('Report not found', 404, [], $request);
         }
 
-        event(new GradebookEntityChanged('report', 'updated', (new ReportResource($report))->resolve()));
+        event(new GradebookEntityChanged('report', 'updated', $this->broadcastPayload($report)));
 
-        return $this->response->success(new ReportResource($report), 'Report updated successfully');
+        return $this->respondWithSecurity(new ReportResource($report), 'Report updated successfully', 200, $request);
     }
 
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
         $report = $this->service->findById($id);
         $deleted = $this->service->delete($id);
 
         if (!$deleted) {
-            return $this->response->error('Report not found', 404);
+            return $this->respondErrorWithSecurity('Report not found', 404, [], $request);
         }
 
         if ($report) {
-            event(new GradebookEntityChanged('report', 'deleted', (new ReportResource($report))->resolve()));
+            event(new GradebookEntityChanged('report', 'deleted', $this->broadcastPayload($report)));
         }
 
-        return $this->response->success(null, 'Report deleted successfully');
+        return $this->respondWithSecurity(null, 'Report deleted successfully', 200, $request);
+    }
+
+    protected function broadcastPayload($report): array
+    {
+        $payload = is_array($report->payload) ? $report->payload : [];
+
+        return [
+            'id' => $report->id,
+            'organization_id' => $report->organization_id,
+            'code' => $report->code,
+            'student_id' => $report->student_id,
+            'student_name' => data_get($payload, 'student.full_name'),
+            'admission_number' => data_get($payload, 'student.admission_number'),
+            'academic_class_id' => $report->academic_class_id,
+            'academic_class_name' => trim(implode(' - ', array_filter([
+                data_get($payload, 'class.name'),
+                data_get($payload, 'class.section_name'),
+            ]))),
+            'academic_year_id' => $report->academic_year_id,
+            'academic_year_name' => data_get($payload, 'academic_year.name'),
+            'academic_term_id' => $report->academic_term_id,
+            'academic_term_name' => data_get($payload, 'academic_term.name'),
+            'template_name' => data_get($payload, 'template.name'),
+            'total_score' => data_get($payload, 'summary.overall_total'),
+            'average_score' => data_get($payload, 'summary.average_score'),
+            'position' => data_get($payload, 'summary.position'),
+            'created_at' => $report->created_at?->toIso8601String(),
+            'updated_at' => $report->updated_at?->toIso8601String(),
+        ];
     }
 }

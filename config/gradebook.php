@@ -4,6 +4,7 @@ return [
     'route_prefix' => 'gradebook',
     'api_prefix' => 'v1',
     'view_namespace' => 'illimi-gradebook',
+    'report_view' => 'illimi-gradebook::report.report-card',
     'menu' => [
         'enabled' => true,
         'label' => 'Gradebook',

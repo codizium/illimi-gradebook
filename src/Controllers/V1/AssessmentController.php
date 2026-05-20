@@ -4,6 +4,7 @@ namespace Illimi\Gradebook\Controllers\V1;
 
 use Codizium\Core\Controllers\BaseController;
 use Codizium\Core\Helpers\CoreJsonResponse;
+use Codizium\Core\Traits\SecureResponse;
 use Illuminate\Http\Request;
 use Illimi\Gradebook\Events\GradebookEntityChanged;
 use Illimi\Gradebook\Requests\StoreAssessmentRequest;
@@ -14,6 +15,8 @@ use Illimi\Gradebook\Services\AssessmentService;
 
 class AssessmentController extends BaseController
 {
+    use SecureResponse;
+
     public function __construct(
         protected AssessmentService $service,
         protected CoreJsonResponse $response
@@ -36,7 +39,7 @@ class AssessmentController extends BaseController
 
         $assessments = $this->service->list($filters, $perPage);
 
-        return $this->response->success(new AssessmentCollection($assessments), 'Assessments retrieved successfully');
+        return $this->respondWithSecurity(new AssessmentCollection($assessments), 'Assessments retrieved successfully', 200, $request);
     }
 
     public function store(StoreAssessmentRequest $request)
@@ -44,18 +47,18 @@ class AssessmentController extends BaseController
         $assessment = $this->service->store($request->validated());
         event(new GradebookEntityChanged('assessment', 'saved', (new AssessmentResource($assessment))->resolve()));
 
-        return $this->response->success(new AssessmentResource($assessment), 'Assessment saved successfully', 201);
+        return $this->respondWithSecurity(new AssessmentResource($assessment), 'Assessment saved successfully', 201, $request);
     }
 
-    public function show(string $id)
+    public function show(Request $request, string $id)
     {
         $assessment = $this->service->findById($id);
 
         if (!$assessment) {
-            return $this->response->error('Assessment not found', 404);
+            return $this->respondErrorWithSecurity('Assessment not found', 404, [], $request);
         }
 
-        return $this->response->success(new AssessmentResource($assessment), 'Assessment retrieved successfully');
+        return $this->respondWithSecurity(new AssessmentResource($assessment), 'Assessment retrieved successfully', 200, $request);
     }
 
     public function update(UpdateAssessmentRequest $request, string $id)
@@ -63,27 +66,27 @@ class AssessmentController extends BaseController
         $assessment = $this->service->update($id, $request->validated());
 
         if (!$assessment) {
-            return $this->response->error('Assessment not found', 404);
+            return $this->respondErrorWithSecurity('Assessment not found', 404, [], $request);
         }
 
         event(new GradebookEntityChanged('assessment', 'updated', (new AssessmentResource($assessment))->resolve()));
 
-        return $this->response->success(new AssessmentResource($assessment), 'Assessment updated successfully');
+        return $this->respondWithSecurity(new AssessmentResource($assessment), 'Assessment updated successfully', 200, $request);
     }
 
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
         $assessment = $this->service->findById($id);
         $deleted = $this->service->delete($id);
 
         if (!$deleted) {
-            return $this->response->error('Assessment not found', 404);
+            return $this->respondErrorWithSecurity('Assessment not found', 404, [], $request);
         }
 
         if ($assessment) {
             event(new GradebookEntityChanged('assessment', 'deleted', (new AssessmentResource($assessment))->resolve()));
         }
 
-        return $this->response->success(null, 'Assessment deleted successfully');
+        return $this->respondWithSecurity(null, 'Assessment deleted successfully', 200, $request);
     }
 }

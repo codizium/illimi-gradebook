@@ -4,6 +4,7 @@ namespace Illimi\Gradebook\Controllers\V1;
 
 use Codizium\Core\Controllers\BaseController;
 use Codizium\Core\Helpers\CoreJsonResponse;
+use Codizium\Core\Traits\SecureResponse;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,8 @@ use Illimi\Students\Models\Student;
 
 class GradebookContextController extends BaseController
 {
+    use SecureResponse;
+
     public function __construct(protected CoreJsonResponse $response)
     {
         parent::__construct();
@@ -176,7 +179,7 @@ class GradebookContextController extends BaseController
             'series' => $analyticsRows,
         ];
 
-        return $this->response->success([
+        return $this->respondWithSecurity([
             'counts' => $counts,
             'subjectPerformance' => $subjectPerformance,
             'academicYears' => $period['academicYears'],
@@ -184,7 +187,7 @@ class GradebookContextController extends BaseController
             'termsForYear' => $period['termsForYear'],
             'selectedAcademicYearId' => $period['selectedAcademicYearId'],
             'selectedAcademicTermId' => $period['selectedAcademicTermId'],
-        ], 'Gradebook dashboard context retrieved successfully.');
+        ], 'Gradebook dashboard context retrieved successfully.', 200, $request);
     }
 
     public function assessmentsIndex(Request $request): JsonResponse
@@ -229,14 +232,14 @@ class GradebookContextController extends BaseController
             });
         })->values();
 
-        return $this->response->success([
+        return $this->respondWithSecurity([
             'subjectClassRows' => $subjectClassRows,
             'academicYears' => $period['academicYears'],
             'academicTerms' => $period['academicTerms'],
             'termsForYear' => $period['termsForYear'],
             'selectedAcademicYearId' => $period['selectedAcademicYearId'],
             'selectedAcademicTermId' => $period['selectedAcademicTermId'],
-        ], 'Gradebook assessment list context retrieved successfully.');
+        ], 'Gradebook assessment list context retrieved successfully.', 200, $request);
     }
 
     public function sheet(Request $request): JsonResponse
@@ -244,7 +247,7 @@ class GradebookContextController extends BaseController
         $subjectId = (string) $request->query('subject_id');
         $classId = (string) $request->query('class_id');
         if ($subjectId === '' || $classId === '') {
-            return $this->response->error('subject_id and class_id are required.', 422);
+            return $this->respondErrorWithSecurity('subject_id and class_id are required.', 422, [], $request);
         }
 
         $subjectModel = $this->queryFor(Subject::class)
@@ -321,7 +324,7 @@ class GradebookContextController extends BaseController
         }
 
         if ($templateItems->isEmpty()) {
-            return $this->response->success([
+            return $this->respondWithSecurity([
                 'subject' => $subjectModel,
                 'class' => $classModel,
                 'academicYears' => $period['academicYears'],
@@ -338,7 +341,7 @@ class GradebookContextController extends BaseController
                 'noTemplate' => true,
                 'noTemplateMessage' => 'No template items found for this subject, class, academic year, and term.',
                 'completionStats' => $completionStats,
-            ], 'Gradebook sheet context retrieved successfully.');
+            ], 'Gradebook sheet context retrieved successfully.', 200, $request);
         }
 
         $ratingService = app(StudentRatingService::class);
@@ -391,7 +394,7 @@ class GradebookContextController extends BaseController
             ];
         })->values();
 
-        return $this->response->success([
+        return $this->respondWithSecurity([
             'subject' => $subjectModel,
             'class' => $classModel,
             'academicYears' => $period['academicYears'],
@@ -406,14 +409,14 @@ class GradebookContextController extends BaseController
             'nonContinuousItems' => $nonContinuousItems,
             'gradebookRows' => $gradebookRows,
             'completionStats' => $completionStats,
-        ], 'Gradebook sheet context retrieved successfully.');
+        ], 'Gradebook sheet context retrieved successfully.', 200, $request);
     }
 
     public function ratings(Request $request): JsonResponse
     {
         $classId = (string) $request->query('class_id');
         if ($classId === '') {
-            return $this->response->error('class_id is required.', 422);
+            return $this->respondErrorWithSecurity('class_id is required.', 422, [], $request);
         }
 
         $classModel = $this->queryFor(AcademicClass::class)
@@ -444,7 +447,7 @@ class GradebookContextController extends BaseController
         $effectiveItems = $ratingService->effectiveItems();
         $psychomotorItems = $ratingService->psychomotorItems();
 
-        return $this->response->success([
+        return $this->respondWithSecurity([
             'class' => $classModel,
             'academicYears' => $period['academicYears'],
             'academicTerms' => $period['academicTerms'],
@@ -456,7 +459,7 @@ class GradebookContextController extends BaseController
             'ratings' => $ratings,
             'effectiveItems' => $effectiveItems,
             'psychomotorItems' => $psychomotorItems,
-        ], 'Gradebook rating context retrieved successfully.');
+        ], 'Gradebook rating context retrieved successfully.', 200, $request);
     }
 
     public function reports(Request $request): JsonResponse
@@ -475,7 +478,7 @@ class GradebookContextController extends BaseController
             ->orderBy('name')
             ->get();
 
-        return $this->response->success([
+        return $this->respondWithSecurity([
             'students' => $students,
             'classes' => $classes,
             'academicYears' => $period['academicYears'],
@@ -483,7 +486,7 @@ class GradebookContextController extends BaseController
             'termsForYear' => $period['termsForYear'],
             'selectedAcademicYearId' => $period['selectedAcademicYearId'],
             'selectedAcademicTermId' => $period['selectedAcademicTermId'],
-        ], 'Gradebook reports context retrieved successfully.');
+        ], 'Gradebook reports context retrieved successfully.', 200, $request);
     }
 
     public function tokens(Request $request): JsonResponse
@@ -501,7 +504,7 @@ class GradebookContextController extends BaseController
             ->orderBy('name')
             ->get();
 
-        return $this->response->success([
+        return $this->respondWithSecurity([
             'students' => $students,
             'classes' => $classes,
             'academicYears' => $period['academicYears'],
@@ -509,7 +512,7 @@ class GradebookContextController extends BaseController
             'termsForYear' => $period['termsForYear'],
             'selectedAcademicYearId' => $period['selectedAcademicYearId'],
             'selectedAcademicTermId' => $period['selectedAcademicTermId'],
-        ], 'Gradebook tokens context retrieved successfully.');
+        ], 'Gradebook tokens context retrieved successfully.', 200, $request);
     }
 
     public function templates(Request $request): JsonResponse
@@ -530,7 +533,7 @@ class GradebookContextController extends BaseController
             ->latest()
             ->get();
 
-        return $this->response->success([
+        return $this->respondWithSecurity([
             'templates' => $templates,
             'subjects' => $subjects,
             'classes' => $classes,
@@ -539,7 +542,6 @@ class GradebookContextController extends BaseController
             'termsForYear' => $period['termsForYear'],
             'selectedAcademicYearId' => $period['selectedAcademicYearId'],
             'selectedAcademicTermId' => $period['selectedAcademicTermId'],
-        ], 'Gradebook templates context retrieved successfully.');
+        ], 'Gradebook templates context retrieved successfully.', 200, $request);
     }
 }
-

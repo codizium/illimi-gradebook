@@ -4,12 +4,15 @@ namespace Illimi\Gradebook\Controllers\V1;
 
 use Codizium\Core\Controllers\BaseController;
 use Codizium\Core\Helpers\CoreJsonResponse;
+use Codizium\Core\Traits\SecureResponse;
 use Illimi\Gradebook\Requests\StoreStudentRatingRequest;
 use Illimi\Gradebook\Resources\StudentRatingResource;
 use Illimi\Gradebook\Services\StudentRatingService;
 
 class StudentRatingController extends BaseController
 {
+    use SecureResponse;
+
     public function __construct(
         protected StudentRatingService $service,
         protected CoreJsonResponse $response
@@ -24,6 +27,6 @@ class StudentRatingController extends BaseController
 
         $rating = $this->service->store($payload);
 
-        return $this->response->success(new StudentRatingResource($rating), 'Student rating saved successfully', 201);
+        return $this->respondWithSecurity(new StudentRatingResource($rating), 'Student rating saved successfully', 201, $request);
     }
 }

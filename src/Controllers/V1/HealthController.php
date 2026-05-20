@@ -4,12 +4,15 @@ namespace Illimi\Gradebook\Controllers\V1;
 
 use Codizium\Core\Controllers\BaseController;
 use Codizium\Core\Helpers\CoreJsonResponse;
+use Codizium\Core\Traits\SecureResponse;
 use Illuminate\Http\Request;
 use Illimi\Gradebook\Jobs\RunGradebookIntegrityChecksJob;
 use Illimi\Gradebook\Services\GradebookHealthService;
 
 class HealthController extends BaseController
 {
+    use SecureResponse;
+
     public function __construct(
         protected GradebookHealthService $service,
         protected CoreJsonResponse $response
@@ -18,7 +21,7 @@ class HealthController extends BaseController
 
     public function summary()
     {
-        return $this->response->success(
+        return $this->respondWithSecurity(
             $this->service->summary(),
             'Gradebook health summary retrieved successfully'
         );
@@ -33,7 +36,7 @@ class HealthController extends BaseController
             'is_resolved' => $request->query('is_resolved'),
         ], $perPage);
 
-        return $this->response->success($alerts, 'Gradebook alerts retrieved successfully');
+        return $this->respondWithSecurity($alerts, 'Gradebook alerts retrieved successfully', 200, $request);
     }
 
     public function run(Request $request)
@@ -45,31 +48,33 @@ class HealthController extends BaseController
         if ($runAsync) {
             RunGradebookIntegrityChecksJob::dispatch($organizationId);
 
-            return $this->response->success([
+            return $this->respondWithSecurity([
                 'queued' => true,
                 'organization_id' => $organizationId,
-            ], 'Gradebook integrity checks queued successfully');
+            ], 'Gradebook integrity checks queued successfully', 200, $request);
         }
 
-        return $this->response->success(
+        return $this->respondWithSecurity(
             $this->service->runChecks($organizationId),
-            'Gradebook integrity checks completed successfully'
+            'Gradebook integrity checks completed successfully',
+            200,
+            $request
         );
     }
 
-    public function resolve(string $id)
+    public function resolve(Request $request, string $id)
     {
-        $payload = request()->validate([
+        $payload = $request->validate([
             'resolution_note' => ['nullable', 'string', 'max:2000'],
         ]);
         $alert = $this->service->resolveAlert($id, $payload['resolution_note'] ?? null);
 
-        return $this->response->success([
+        return $this->respondWithSecurity([
             'id' => $alert->id,
             'is_resolved' => (bool) $alert->is_resolved,
             'resolved_at' => $alert->resolved_at?->toIso8601String(),
             'resolution_note' => $alert->resolution_note,
-        ], 'Gradebook alert resolved successfully');
+        ], 'Gradebook alert resolved successfully', 200, $request);
     }
 
     public function bulkResolve(Request $request)
@@ -82,6 +87,6 @@ class HealthController extends BaseController
 
         $result = $this->service->resolveAlerts($payload['ids'], $payload['resolution_note'] ?? null);
 
-        return $this->response->success($result, 'Gradebook alerts resolved successfully');
+        return $this->respondWithSecurity($result, 'Gradebook alerts resolved successfully', 200, $request);
     }
 }

@@ -4,6 +4,7 @@ namespace Illimi\Gradebook\Controllers\V1;
 
 use Codizium\Core\Controllers\BaseController;
 use Codizium\Core\Helpers\CoreJsonResponse;
+use Codizium\Core\Traits\SecureResponse;
 use Illuminate\Http\Request;
 use Illimi\Gradebook\Events\GradebookEntityChanged;
 use Illimi\Gradebook\Requests\GenerateTokenRequest;
@@ -15,6 +16,8 @@ use Illimi\Gradebook\Services\TokenService;
 
 class TokenController extends BaseController
 {
+    use SecureResponse;
+
     public function __construct(
         protected TokenService $service,
         protected CoreJsonResponse $response
@@ -35,7 +38,7 @@ class TokenController extends BaseController
 
         $tokens = $this->service->list($filters, $perPage);
 
-        return $this->response->success(new TokenCollection($tokens), 'Tokens retrieved successfully');
+        return $this->respondWithSecurity(new TokenCollection($tokens), 'Tokens retrieved successfully', 200, $request);
     }
 
     public function store(StoreTokenRequest $request)
@@ -43,18 +46,18 @@ class TokenController extends BaseController
         $token = $this->service->store($request->validated());
         event(new GradebookEntityChanged('token', 'created', (new TokenResource($token))->resolve()));
 
-        return $this->response->success(new TokenResource($token), 'Token created successfully', 201);
+        return $this->respondWithSecurity(new TokenResource($token), 'Token created successfully', 201, $request);
     }
 
-    public function show(string $id)
+    public function show(Request $request, string $id)
     {
         $token = $this->service->findById($id);
 
         if (! $token) {
-            return $this->response->error('Token not found', 404);
+            return $this->respondErrorWithSecurity('Token not found', 404, [], $request);
         }
 
-        return $this->response->success(new TokenResource($token), 'Token retrieved successfully');
+        return $this->respondWithSecurity(new TokenResource($token), 'Token retrieved successfully', 200, $request);
     }
 
     public function update(UpdateTokenRequest $request, string $id)
@@ -62,28 +65,28 @@ class TokenController extends BaseController
         $token = $this->service->update($id, $request->validated());
 
         if (! $token) {
-            return $this->response->error('Token not found', 404);
+            return $this->respondErrorWithSecurity('Token not found', 404, [], $request);
         }
 
         event(new GradebookEntityChanged('token', 'updated', (new TokenResource($token))->resolve()));
 
-        return $this->response->success(new TokenResource($token), 'Token updated successfully');
+        return $this->respondWithSecurity(new TokenResource($token), 'Token updated successfully', 200, $request);
     }
 
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
         $token = $this->service->findById($id);
         $deleted = $this->service->delete($id);
 
         if (! $deleted) {
-            return $this->response->error('Token not found', 404);
+            return $this->respondErrorWithSecurity('Token not found', 404, [], $request);
         }
 
         if ($token) {
             event(new GradebookEntityChanged('token', 'deleted', (new TokenResource($token))->resolve()));
         }
 
-        return $this->response->success(null, 'Token deleted successfully');
+        return $this->respondWithSecurity(null, 'Token deleted successfully', 200, $request);
     }
 
     public function generate(GenerateTokenRequest $request)
@@ -99,9 +102,9 @@ class TokenController extends BaseController
             'academic_term_id' => $request->validated('academic_term_id'),
         ]));
 
-        return $this->response->success([
+        return $this->respondWithSecurity([
             'generated_count' => $tokens->count(),
             'tokens' => $tokens->map(fn ($token) => (new TokenResource($token))->resolve())->all(),
-        ], 'Tokens generated successfully');
+        ], 'Tokens generated successfully', 200, $request);
     }
 }

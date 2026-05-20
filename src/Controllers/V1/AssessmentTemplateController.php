@@ -4,6 +4,7 @@ namespace Illimi\Gradebook\Controllers\V1;
 
 use Codizium\Core\Controllers\BaseController;
 use Codizium\Core\Helpers\CoreJsonResponse;
+use Codizium\Core\Traits\SecureResponse;
 use Illuminate\Http\Request;
 use Illimi\Gradebook\Events\GradebookEntityChanged;
 use Illimi\Gradebook\Requests\StoreAssessmentTemplateRequest;
@@ -14,6 +15,8 @@ use Illimi\Gradebook\Services\AssessmentTemplateService;
 
 class AssessmentTemplateController extends BaseController
 {
+    use SecureResponse;
+
     public function __construct(
         protected AssessmentTemplateService $service,
         protected CoreJsonResponse $response
@@ -34,7 +37,7 @@ class AssessmentTemplateController extends BaseController
 
         $templates = $this->service->list($filters, $perPage);
 
-        return $this->response->success(new AssessmentTemplateCollection($templates), 'Assessment templates retrieved successfully');
+        return $this->respondWithSecurity(new AssessmentTemplateCollection($templates), 'Assessment templates retrieved successfully', 200, $request);
     }
 
     public function store(StoreAssessmentTemplateRequest $request)
@@ -42,18 +45,18 @@ class AssessmentTemplateController extends BaseController
         $template = $this->service->store($request->validated());
         event(new GradebookEntityChanged('assessment_template', 'created', (new AssessmentTemplateResource($template))->resolve()));
 
-        return $this->response->success(new AssessmentTemplateResource($template), 'Assessment template created successfully', 201);
+        return $this->respondWithSecurity(new AssessmentTemplateResource($template), 'Assessment template created successfully', 201, $request);
     }
 
-    public function show(string $id)
+    public function show(Request $request, string $id)
     {
         $template = $this->service->findById($id);
 
         if (!$template) {
-            return $this->response->error('Assessment template not found', 404);
+            return $this->respondErrorWithSecurity('Assessment template not found', 404, [], $request);
         }
 
-        return $this->response->success(new AssessmentTemplateResource($template), 'Assessment template retrieved successfully');
+        return $this->respondWithSecurity(new AssessmentTemplateResource($template), 'Assessment template retrieved successfully', 200, $request);
     }
 
     public function update(UpdateAssessmentTemplateRequest $request, string $id)
@@ -61,27 +64,27 @@ class AssessmentTemplateController extends BaseController
         $template = $this->service->update($id, $request->validated());
 
         if (!$template) {
-            return $this->response->error('Assessment template not found', 404);
+            return $this->respondErrorWithSecurity('Assessment template not found', 404, [], $request);
         }
 
         event(new GradebookEntityChanged('assessment_template', 'updated', (new AssessmentTemplateResource($template))->resolve()));
 
-        return $this->response->success(new AssessmentTemplateResource($template), 'Assessment template updated successfully');
+        return $this->respondWithSecurity(new AssessmentTemplateResource($template), 'Assessment template updated successfully', 200, $request);
     }
 
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
         $template = $this->service->findById($id);
         $deleted = $this->service->delete($id);
 
         if (!$deleted) {
-            return $this->response->error('Assessment template not found', 404);
+            return $this->respondErrorWithSecurity('Assessment template not found', 404, [], $request);
         }
 
         if ($template) {
             event(new GradebookEntityChanged('assessment_template', 'deleted', (new AssessmentTemplateResource($template))->resolve()));
         }
 
-        return $this->response->success(null, 'Assessment template deleted successfully');
+        return $this->respondWithSecurity(null, 'Assessment template deleted successfully', 200, $request);
     }
 }
