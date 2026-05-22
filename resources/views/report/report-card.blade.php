@@ -559,8 +559,10 @@
                             class="meta-value">{{ $className }}</span></div>
                 </td>
                 <td>
-                    <div class="meta-line"><span class="meta-label">Class Position:</span><span
-                            class="meta-value plain">{{ $classPosition }} / {{ $classSize }}</span></div>
+                    @if (data_get($slipSettings ?? [], 'show_position', true))
+                        <div class="meta-line"><span class="meta-label">Class Position:</span><span
+                                class="meta-value plain">{{ $classPosition }} / {{ $classSize }}</span></div>
+                    @endif
                 </td>
                 <td>
                     <div class="meta-line"><span class="meta-label">Report Token:</span><span
@@ -579,12 +581,16 @@
             </tr>
             <tr>
                 <td>
-                    <div class="meta-line"><span class="meta-label">Average Score:</span><span
-                            class="meta-value plain">{{ $averageScore }}</span></div>
+                    @if (data_get($slipSettings ?? [], 'show_average', true))
+                        <div class="meta-line"><span class="meta-label">Average Score:</span><span
+                                class="meta-value plain">{{ $averageScore }}</span></div>
+                    @endif
                 </td>
                 <td>
-                    <div class="meta-line"><span class="meta-label">Total Score:</span><span
-                            class="meta-value plain">{{ $overallTotal }}</span></div>
+                    @if (data_get($slipSettings ?? [], 'show_total_score', true))
+                        <div class="meta-line"><span class="meta-label">Total Score:</span><span
+                                class="meta-value plain">{{ $overallTotal }}</span></div>
+                    @endif
                 </td>
                 <td>
                     <div class="meta-line"><span class="meta-label">Date Generated:</span><span
@@ -605,7 +611,9 @@
                     @endforeach
                     <th class="medium">Total</th>
                     <th class="narrow">Grade</th>
-                    <th class="narrow">Pos.</th>
+                    @if (data_get($slipSettings ?? [], 'show_subject_position', true))
+                        <th class="narrow">Pos.</th>
+                    @endif
                     <th class="remark-col">Remark</th>
                 </tr>
             </thead>
@@ -622,12 +630,14 @@
                         @endforeach
                         <td class="medium">{{ $row['total'] }}</td>
                         <td class="narrow">{{ $row['grade'] }}</td>
-                        <td class="narrow">{{ $row['position'] }}</td>
+                        @if (data_get($slipSettings ?? [], 'show_subject_position', true))
+                            <td class="narrow">{{ $row['position'] }}</td>
+                        @endif
                         <td class="remark-col">{{ $row['remark'] }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ 6 + count($componentColumns ?? []) }}"
+                        <td colspan="{{ (data_get($slipSettings ?? [], 'show_subject_position', true) ? 6 : 5) + count($componentColumns ?? []) }}"
                             style="text-align:center; padding: 6px;">No assessments found.</td>
                     </tr>
                 @endforelse
@@ -679,7 +689,7 @@
                         @endif
                     </td>
                     <td class="auth-right">
-                        @if (!empty($qrSvg))
+                        @if (!empty($qrSvg) && data_get($slipSettings ?? [], 'show_qrcode', true))
                             <div class="verify-box">
                                 <p class="verify-title">Verify Result</p>
                                 <div class="verify-qr">{!! $qrSvg !!}</div>
@@ -690,72 +700,97 @@
             </table>
         @endif
 
-        <table class="traits-table">
-            <tr>
-                <td>
-                    <div class="trait-box">
-                        <div class="trait-title">Effective Traits</div>
-                        <table class="trait-inner">
-                            <thead>
-                                <tr>
-                                    <th>Trait</th>
-                                    <th>Grade</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($traitRows as $traitRow)
-                                    <tr>
-                                        <td>{{ $traitRow['effective_label'] }}</td>
-                                        <td>{{ $traitRow['effective_grade'] }}</td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                </td>
-                <td>
-                    <div class="trait-box">
-                        <div class="trait-title">Psychomotor Skills</div>
-                        <table class="trait-inner">
-                            <thead>
-                                <tr>
-                                    <th>Skill</th>
-                                    <th>Grade</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($traitRows as $traitRow)
-                                    <tr>
-                                        <td>{{ $traitRow['psychomotor_label'] }}</td>
-                                        <td>{{ $traitRow['psychomotor_grade'] }}</td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                </td>
-            </tr>
-        </table>
+        @php
+            $showEffectiveTraits = data_get($slipSettings ?? [], 'show_effective_traits', true);
+            $showPsychomotorSkills = data_get($slipSettings ?? [], 'show_psychomotor_skills', true);
+        @endphp
+
+        @if ($showEffectiveTraits || $showPsychomotorSkills)
+            <table class="traits-table">
+                <tr>
+                    @if ($showEffectiveTraits)
+                        <td>
+                            <div class="trait-box">
+                                <div class="trait-title">Effective Traits</div>
+                                <table class="trait-inner">
+                                    <thead>
+                                        <tr>
+                                            <th>Trait</th>
+                                            <th>Grade</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($traitRows as $traitRow)
+                                            <tr>
+                                                <td>{{ $traitRow['effective_label'] }}</td>
+                                                <td>{{ $traitRow['effective_grade'] }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </td>
+                    @endif
+                    @if ($showPsychomotorSkills)
+                        <td>
+                            <div class="trait-box">
+                                <div class="trait-title">Psychomotor Skills</div>
+                                <table class="trait-inner">
+                                    <thead>
+                                        <tr>
+                                            <th>Skill</th>
+                                            <th>Grade</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($traitRows as $traitRow)
+                                            <tr>
+                                                <td>{{ $traitRow['psychomotor_label'] }}</td>
+                                                <td>{{ $traitRow['psychomotor_grade'] }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </td>
+                    @endif
+                </tr>
+            </table>
+        @endif
 
         <div class="comments">
             <div class="comment-box">
                 <p class="comment-title">Class Teacher's Comment</p>
-                <p class="comment-body">{{ $comment }}</p>
+                <p class="comment-body">{{ $teacherComment ?? $comment }}</p>
             </div>
             <div class="comment-box">
                 <p class="comment-title">Principal's Comment</p>
-                <p class="comment-body">{{ $comment }}</p>
+                <p class="comment-body">{{ $principalComment ?? $comment }}</p>
             </div>
         </div>
 
         <table class="signatures">
             <tr>
                 <td>
-                    <div class="signature-line"></div>
+                    @if (!empty($classTeacherSignatureUrl))
+                        <div style="height:50px; display:flex; align-items:flex-end; justify-content:center;">
+                            <img src="{{ $classTeacherSignatureUrl }}" alt="Class Teacher Signature"
+                                style="max-height:50px; max-width:100%; object-fit:contain;">
+                        </div>
+                    @else
+                        <div class="signature-line"></div>
+                    @endif
                     <div class="signature-label">Class Teacher's Signature</div>
                 </td>
                 <td>
-                    <div class="signature-line"></div>
+                    @if (!empty($principalSignatureUrl))
+                        <div style="height:50px; display:flex; align-items:flex-end; justify-content:center;">
+                            <img src="{{ $principalSignatureUrl }}" alt="Principal Signature"
+                                style="max-height:50px; max-width:100%; object-fit:contain;">
+                        </div>
+                    @else
+                        <div class="signature-line"></div>
+                    @endif
                     <div class="signature-label">Principal's Signature &amp; Date</div>
                 </td>
             </tr>

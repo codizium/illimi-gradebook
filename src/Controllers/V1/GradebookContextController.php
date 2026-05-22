@@ -437,6 +437,7 @@ class GradebookContextController extends BaseController
         $currentStaffId = optional(Staff::query()->where('user_id', auth()->id())->first())?->id;
 
         $ratingService = app(StudentRatingService::class);
+        $org = function_exists('organization') ? organization() : null;
         $context = [
             'academic_class_id' => $classModel->id,
             'academic_year_id' => $selectedAcademicYearId,
@@ -444,8 +445,8 @@ class GradebookContextController extends BaseController
         ];
 
         $ratings = $ratingService->forContext($context);
-        $effectiveItems = $ratingService->effectiveItems();
-        $psychomotorItems = $ratingService->psychomotorItems();
+        $effectiveItems = $ratingService->effectiveItems($org);
+        $psychomotorItems = $ratingService->psychomotorItems($org);
 
         return $this->respondWithSecurity([
             'class' => $classModel,

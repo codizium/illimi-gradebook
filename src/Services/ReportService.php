@@ -265,7 +265,11 @@ class ReportService
                 'remark' => $assessmentItems->pluck('remark')->filter()->map(fn ($remark) => trim((string) $remark))->first(),
             ],
             'token' => $tokenCode !== '' ? $tokenCode : null,
-            'ratings' => $this->getRatings($criteria),
+            'ratings' => $this->getRatings(array_merge($criteria, [
+                'average_score' => $assessmentItems->count() > 0 ? (float) $assessmentItems->avg('total_score') : 0.0,
+                'position' => $ranking['position'] ?? null,
+                'out_of' => $ranking['out_of'] ?? null,
+            ])),
             'assessments' => $this->mapAssessmentsWithScores($assessments),
             'generated_at' => now()->toIso8601String(),
         ];
@@ -436,16 +440,50 @@ class ReportService
             ->where('academic_term_id', $criteria['academic_term_id'])
             ->first();
 
-        if (!$rating) {
-            return [
-                'effective' => [],
-                'psychomotor' => [],
-            ];
+        $org = function_exists('organization') ? organization() : null;
+        if ((! $org || (($criteria['organization_id'] ?? null) && (string) $org->id !== (string) $criteria['organization_id'])) && ($criteria['organization_id'] ?? null)) {
+            $org = \Codizium\Core\Models\Organization::query()->find($criteria['organization_id']);
         }
 
+        $autoGenerateEffective = (bool) ($org?->getArtifactValue('result_slip_auto_generate_effective_traits', true) ?? true);
+        $autoGeneratePsychomotor = (bool) ($org?->getArtifactValue('result_slip_auto_generate_psychomotor_skills', true) ?? true);
+
+        $average = (float) ($criteria['average_score'] ?? 0.0);
+        $seedBase = implode('|', array_filter([
+            (string) ($org?->id ?? ''),
+            (string) ($criteria['student_id'] ?? ''),
+            (string) ($criteria['academic_year_id'] ?? ''),
+            (string) ($criteria['academic_term_id'] ?? ''),
+            (string) ($criteria['academic_class_id'] ?? ''),
+        ]));
+        $seed = (int) sprintf('%u', crc32($seedBase));
+
+        $generateRating = static function (float $avg, int $seed, string $key): int {
+            $base = 1;
+            if ($avg >= 75) $base = 5;
+            elseif ($avg >= 60) $base = 4;
+            elseif ($avg >= 50) $base = 3;
+            elseif ($avg >= 40) $base = 2;
+
+            $kSeed = (int) sprintf('%u', crc32($seed . '|' . $key));
+            $delta = ($kSeed % 3) - 1; // -1, 0, +1
+
+            // Keep top performers mostly high and low performers mostly low.
+            if ($base >= 4 && $delta < 0) $delta = 0;
+            if ($base <= 2 && $delta > 0) $delta = 0;
+
+            return max(1, min(5, $base + $delta));
+        };
+
+        $effectiveAssessment = is_array($rating?->effective_assessment) ? $rating->effective_assessment : [];
+        $psychomotorAssessment = is_array($rating?->psychomotor_assessment) ? $rating->psychomotor_assessment : [];
+
         $effective = [];
-        foreach ($this->ratingService->effectiveItems() as $key => $label) {
-            $val = $rating->effective_assessment[$key] ?? null;
+        foreach ($this->ratingService->effectiveItems($org) as $key => $label) {
+            $val = $effectiveAssessment[$key] ?? null;
+            if (($val === null || $val === '') && (! $rating || $autoGenerateEffective)) {
+                $val = $autoGenerateEffective ? $generateRating($average, $seed, 'e:' . $key) : null;
+            }
             $effective[] = [
                 'label' => $label,
                 'value' => $val,
@@ -454,8 +492,11 @@ class ReportService
         }
 
         $psychomotor = [];
-        foreach ($this->ratingService->psychomotorItems() as $key => $label) {
-            $val = $rating->psychomotor_assessment[$key] ?? null;
+        foreach ($this->ratingService->psychomotorItems($org) as $key => $label) {
+            $val = $psychomotorAssessment[$key] ?? null;
+            if (($val === null || $val === '') && (! $rating || $autoGeneratePsychomotor)) {
+                $val = $autoGeneratePsychomotor ? $generateRating($average, $seed, 'p:' . $key) : null;
+            }
             $psychomotor[] = [
                 'label' => $label,
                 'value' => $val,

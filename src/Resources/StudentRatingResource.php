@@ -11,6 +11,7 @@ class StudentRatingResource extends JsonResource
     public function toArray(Request $request): array
     {
         $service = app(StudentRatingService::class);
+        $org = function_exists('organization') ? organization() : null;
 
         return [
             'id' => $this->id,
@@ -19,7 +20,7 @@ class StudentRatingResource extends JsonResource
             'academic_year_id' => $this->academic_year_id,
             'academic_term_id' => $this->academic_term_id,
             'staff_id' => $this->staff_id,
-            'effective_assessment' => collect($service->effectiveItems())->map(function ($label, $key) use ($service) {
+            'effective_assessment' => collect($service->effectiveItems($org))->map(function ($label, $key) use ($service) {
                 $value = $this->effective_assessment[$key] ?? null;
 
                 return [
@@ -29,7 +30,7 @@ class StudentRatingResource extends JsonResource
                     'rating' => $service->ratingLabel($value),
                 ];
             })->values(),
-            'psychomotor_assessment' => collect($service->psychomotorItems())->map(function ($label, $key) use ($service) {
+            'psychomotor_assessment' => collect($service->psychomotorItems($org))->map(function ($label, $key) use ($service) {
                 $value = $this->psychomotor_assessment[$key] ?? null;
 
                 return [
